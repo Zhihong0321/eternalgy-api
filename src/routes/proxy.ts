@@ -182,4 +182,27 @@ export async function proxyRoutes(app: FastifyInstance) {
     },
     handleProxyRequest
   );
+
+  // Dedicated Direct Convenience Route: /v1/settings/ats-addon-price & /api/v1/settings/ats-addon-price
+  const forwardToAtsAddon = async (req: FastifyRequest, rep: FastifyReply) => {
+    (req.params as any).service = 'calculator';
+    (req.params as any)['*'] = 'api/v1/settings/ats-addon-price';
+    return handleProxyRequest(req as any, rep);
+  };
+
+  app.all('/v1/settings/ats-addon-price', {
+    schema: {
+      tags: ['ATAP Solar Calculator (ATS Add-on)'],
+      summary: 'Get or update ATAP Solar ATS Addon Price',
+      description: 'Convenience route to ATAP Solar Calculator ATS add-on price setting (https://calculator.atap.solar)',
+    },
+  }, forwardToAtsAddon);
+
+  app.all('/api/v1/settings/ats-addon-price', {
+    schema: {
+      tags: ['ATAP Solar Calculator (ATS Add-on)'],
+      summary: 'Get or update ATAP Solar ATS Addon Price',
+      description: 'Convenience route to ATAP Solar Calculator ATS add-on price setting (https://calculator.atap.solar)',
+    },
+  }, forwardToAtsAddon);
 }

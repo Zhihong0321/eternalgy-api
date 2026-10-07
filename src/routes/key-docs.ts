@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { keyService } from '../security/key-service.js';
+import { proxyService } from '../security/proxy-service.js';
 import { schemaService, ColumnMetadata } from '../db/schema-service.js';
 import { DEFAULT_SENSITIVE_COLUMNS } from '../security/policies.js';
 import { ApiKeyRecord } from '../security/types.js';
@@ -162,6 +163,44 @@ export async function keyDocsRoutes(app: FastifyInstance) {
       });
     }
 
+    const proxyList = [];
+    if (key.proxies) {
+      for (const [serviceId, policy] of Object.entries(key.proxies)) {
+        const svc = await proxyService.getService(serviceId);
+        const isCalc = serviceId === 'calculator';
+        proxyList.push({
+          id: serviceId,
+          name: isCalc ? 'ATAP Solar Calculator (ATS Add-on Price)' : (svc?.name || serviceId),
+          baseUrl: svc?.baseUrl || '',
+          description: isCalc ? 'Manage ATS Add-on Price settings on ATAP Solar Calculator (https://calculator.atap.solar)' : (svc?.description || ''),
+          policy,
+          endpoints: isCalc ? [
+            {
+              method: 'GET',
+              path: '/v1/settings/ats-addon-price',
+              description: 'Retrieve current ATS Add-on price setting from ATAP Solar Calculator',
+            },
+            {
+              method: 'PUT',
+              path: '/v1/settings/ats-addon-price',
+              description: 'Update ATS Add-on price (Payload: {"price": 1500})',
+            },
+            {
+              method: 'ALL',
+              path: `/api/proxy/${serviceId}/*`,
+              description: `Forward any raw request to ${svc?.baseUrl || serviceId}`,
+            },
+          ] : [
+            {
+              method: 'ALL',
+              path: `/api/proxy/${serviceId}/*`,
+              description: `Forward any raw request to ${svc?.baseUrl || serviceId}`,
+            },
+          ],
+        });
+      }
+    }
+
     return {
       keyId: key.id,
       clientName: key.name,
@@ -170,6 +209,7 @@ export async function keyDocsRoutes(app: FastifyInstance) {
       allowedTablesCount: tableSchemas.length,
       tables: tableSchemas,
       proxies: key.proxies || {},
+      proxyServices: proxyList,
     };
   });
 

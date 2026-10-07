@@ -212,4 +212,21 @@ describe('3rd-Party API Gateway Proxy & Credential Injection', () => {
       expect(json.success).toBe(true);
     }
   });
+
+  it('routes direct /v1/settings/ats-addon-price and /api/v1/settings/ats-addon-price seamlessly', async () => {
+    for (const url of ['/v1/settings/ats-addon-price', '/api/v1/settings/ats-addon-price']) {
+      const res = await app.inject({
+        method: 'GET',
+        url,
+        headers: {
+          'x-api-key': 'weihao2026',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const json = res.json();
+      expect(json.success).toBe(true);
+      expect(json.data.key).toBe('ats_addon_price');
+    }
+  });
 });

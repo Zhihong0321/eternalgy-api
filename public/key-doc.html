@@ -137,7 +137,7 @@
               </div>
               <h1 id="heroKeyName" style="font-size: 24px; font-weight: 700; margin-bottom: 6px;">--</h1>
               <p style="color: var(--text-muted); font-size: 13px;">
-                This page documents the live connection credentials, access permissions, and table schemas specifically granted to this API key.
+                This page documents the live connection credentials, database tables, and 3rd-party proxy endpoints explicitly granted to this API key.
               </p>
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
@@ -151,32 +151,36 @@
               <div class="meta-box-val" id="metaKeyId">--</div>
             </div>
             <div class="meta-box">
-              <div class="meta-box-label">Role</div>
+              <div class="meta-box-label">Role Definition</div>
               <div class="meta-box-val" id="metaRole">--</div>
             </div>
             <div class="meta-box">
-              <div class="meta-box-label">Rate Limit Quota</div>
-              <div class="meta-box-val"><span id="metaRpm">--</span> <span style="font-size: 11px; color: var(--text-muted);">req/min</span></div>
+              <div class="meta-box-label">Rate Limit</div>
+              <div class="meta-box-val"><span id="metaRpm">--</span> rpm</div>
             </div>
             <div class="meta-box">
-              <div class="meta-box-label">Authorized Tables</div>
-              <div class="meta-box-val" style="color: var(--accent);" id="metaTableCount">--</div>
+              <div class="meta-box-label">Database Tables</div>
+              <div class="meta-box-val" id="metaTableCount">--</div>
+            </div>
+            <div class="meta-box">
+              <div class="meta-box-label">3rd-Party APIs</div>
+              <div class="meta-box-val" id="metaProxyCount" style="color: #38bdf8;">--</div>
             </div>
           </div>
         </div>
 
-        <!-- Section Navigation Tabs -->
+        <!-- Section Navigation -->
         <div class="section-tab-nav">
-          <button class="sec-tab-btn active" data-sec="profileSec">🔌 Connection & Access Profile</button>
-          <button class="sec-tab-btn" data-sec="docsSec">📚 Endpoints & Table Schemas</button>
-          <button class="sec-tab-btn" data-sec="testerSec">💻 Code Samples & Live Tester</button>
+          <button class="sec-tab-btn active" data-sec="overviewSec">📋 Access Matrix & Keys</button>
+          <button class="sec-tab-btn" data-sec="docsSec">📖 Endpoints & Schema</button>
+          <button class="sec-tab-btn" data-sec="testerSec">⚡ Live Tester & Code</button>
         </div>
 
-        <!-- SECTION 1: CONNECTION & ACCESS PROFILE -->
-        <section id="profileSec" class="sec-pane active">
-          <div class="grid-cards">
+        <!-- SECTION 1: OVERVIEW & CREDENTIALS -->
+        <section id="overviewSec" class="sec-pane active">
+          <div class="grid-cards" style="grid-template-columns: 1.2fr 0.8fr; margin-bottom: 24px;">
             <!-- Connection Card -->
-            <div class="card" style="grid-column: span 2;">
+            <div class="card">
               <h3 style="font-size: 16px; margin-bottom: 12px;">Connection Instructions</h3>
               <div style="display: flex; flex-direction: column; gap: 12px;">
                 <div>
@@ -193,10 +197,10 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
                 <div>
                   <div class="meta-box-label">Standard HTTP Status Codes</div>
                   <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; font-size: 12px; margin-top: 6px;">
-                    <div><span class="status-code s2xx">200 OK</span>: Successful query</div>
-                    <div><span class="status-code s2xx">201 Created</span>: Record inserted</div>
+                    <div><span class="status-code s2xx">200 OK</span>: Successful request</div>
+                    <div><span class="status-code s2xx">201 Created</span>: Record created</div>
                     <div><span class="status-code s4xx">401 Unauthorized</span>: Missing or invalid key</div>
-                    <div><span class="status-code s4xx">403 Forbidden</span>: Table/action not granted</div>
+                    <div><span class="status-code s4xx">403 Forbidden</span>: Resource/action not granted</div>
                     <div><span class="status-code s4xx">429 Rate Limit</span>: Exceeded quota</div>
                   </div>
                 </div>
@@ -207,19 +211,41 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
             <div class="card">
               <h3 style="font-size: 16px; margin-bottom: 12px;">Enforced Guardrails</h3>
               <ul style="color: var(--text-muted); font-size: 13px; list-style-position: inside; display: flex; flex-direction: column; gap: 8px;">
-                <li><b>Hard Limit Capping</b>: Queries are capped at max 100 rows per request.</li>
+                <li><b>Single Key Architecture</b>: 1 key accesses both internal DB and 3rd-party APIs.</li>
+                <li><b>Credential Cloaking</b>: Upstream secret keys (e.g. calculator2026) are injected safely.</li>
+                <li><b>Hard Limit Capping</b>: Queries capped at max 100 rows per request.</li>
                 <li><b>Statement Timeout</b>: 5,000ms max execution time to protect database CPU.</li>
-                <li><b>Column Masking</b>: Unapproved fields are stripped server-side.</li>
                 <li><b>Sensitive Scrubbing</b>: Passwords, tokens, and hashes are permanently blocked.</li>
               </ul>
             </div>
           </div>
 
+          <!-- 3rd-Party Proxy Services Card -->
+          <div class="card" id="proxyServicesCard" style="margin-bottom: 24px;">
+            <h3 style="font-size: 16px; margin-bottom: 6px; color: #38bdf8;">🌐 Authorized 3rd-Party APIs & Services</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+              External services you can access through this gateway. Upstream authentication credentials are injected automatically.
+            </p>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Service Name</th>
+                    <th>Direct Route / Endpoint</th>
+                    <th>Allowed Actions</th>
+                    <th>Upstream Target</th>
+                  </tr>
+                </thead>
+                <tbody id="proxyMatrixBody"></tbody>
+              </table>
+            </div>
+          </div>
+
           <!-- Access Profile Matrix Table -->
           <div class="card">
-            <h3 style="font-size: 16px; margin-bottom: 6px;">Granted Access Control Matrix</h3>
+            <h3 style="font-size: 16px; margin-bottom: 6px; color: #10b981;">🗄️ Granted Database Tables Matrix</h3>
             <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
-              Below is the comprehensive list of tables, operations, and columns explicitly authorized for this key.
+              Comprehensive list of internal PostgreSQL tables and operations explicitly authorized for this key.
             </p>
             <div class="table-container">
               <table>
@@ -241,8 +267,8 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
         <section id="docsSec" class="sec-pane">
           <div class="layout-grid">
             <div class="sidebar-menu">
-              <div style="font-size: 11px; text-transform: uppercase; font-weight: 600; color: var(--text-muted); margin-bottom: 12px;">
-                Authorized Tables
+              <div style="font-size: 11px; text-transform: uppercase; font-weight: 600; color: var(--text-muted); margin-bottom: 8px;">
+                Authorized Resources
               </div>
               <div id="tableNavLinks"></div>
             </div>
@@ -262,17 +288,17 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
               <button class="code-tab-btn" onclick="switchCodeSnippet('js')">JavaScript (Node / Browser)</button>
               <button class="code-tab-btn" onclick="switchCodeSnippet('python')">Python</button>
             </div>
-            <pre id="activeSnippetCode" style="max-height: 300px;"><code>Loading snippet...</code></pre>
+            <pre id="activeSnippetCode" style="max-height: 350px;"><code>Loading snippet...</code></pre>
           </div>
 
           <div class="card">
-            <h3 style="font-size: 16px; margin-bottom: 12px;">Interactive Query Runner</h3>
+            <h3 style="font-size: 16px; margin-bottom: 12px;">Interactive Endpoint Tester</h3>
             <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
-              Execute a live query through the gateway using this key's credentials.
+              Execute live GET queries through the gateway using this key.
             </p>
-            <div style="display: grid; grid-template-columns: 140px 1fr auto; gap: 8px; margin-bottom: 12px;">
-              <select id="testTableSelect" class="form-select" style="font-size: 13px;"></select>
-              <input type="text" id="testQueryInput" class="form-input" value="limit=2" placeholder="Query params (e.g. limit=5&sort=id)" style="font-family: var(--font-mono); font-size: 13px;">
+            <div style="display: grid; grid-template-columns: 240px 1fr auto; gap: 8px; margin-bottom: 12px;">
+              <select id="testTableSelect" class="form-select" style="font-size: 13px;" onchange="handleTestTargetChange()"></select>
+              <input type="text" id="testQueryInput" class="form-input" value="limit=2" placeholder="Query params or payload" style="font-family: var(--font-mono); font-size: 13px;">
               <button class="btn primary" onclick="executeLiveTest()">Send Request</button>
             </div>
             <pre id="testResponseBox" style="max-height: 350px;">Click "Send Request" to test your query.</pre>
@@ -284,10 +310,10 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
   </div>
 
   <script>
-    let keyId = window.location.pathname.split('/').pop() || new URLSearchParams(window.location.search).get('keyId') || 'key_viewer_demo';
+    let keyId = window.location.pathname.split('/').pop() || new URLSearchParams(window.location.search).get('keyId') || 'key_weihao';
     let rawSecret = new URLSearchParams(window.location.search).get('secret') || '';
     let spec = null;
-    let selectedTable = '';
+    let selectedResource = '';
     let currentCodeLang = 'curl';
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -337,135 +363,255 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
       document.getElementById('metaKeyId').innerText = data.keyId;
       document.getElementById('metaRole').innerText = data.role || 'default';
       document.getElementById('metaRpm').innerText = data.rateLimitRpm;
-      document.getElementById('metaTableCount').innerText = `${data.allowedTablesCount} tables`;
+      document.getElementById('metaTableCount').innerText = `${data.allowedTablesCount || 0} tables`;
+      document.getElementById('metaProxyCount').innerText = `${(data.proxyServices || []).length} services`;
       document.getElementById('connBaseUrl').innerText = window.location.origin;
 
       document.getElementById('openApiDownloadBtn').href = `/api/docs/key-openapi.json?keyId=${encodeURIComponent(data.keyId)}`;
 
-      // Render Matrix Table
-      const matrixBody = document.getElementById('matrixTableBody');
-      matrixBody.innerHTML = data.tables.map(t => {
-        const readableCount = t.columns.readable.length;
-        const writableCount = t.columns.writable.length;
-        const acts = t.actions.map(a => `<span class="method ${a === 'read' ? 'get' : a === 'create' ? 'post' : a === 'update' ? 'patch' : 'delete'}">${a.toUpperCase()}</span>`).join(' ');
+      // 1. Render Proxy Services Matrix
+      const proxyMatrixBody = document.getElementById('proxyMatrixBody');
+      const proxyCard = document.getElementById('proxyServicesCard');
+      const proxyServices = data.proxyServices || [];
 
-        return `
+      if (proxyServices.length > 0) {
+        proxyCard.style.display = 'block';
+        proxyMatrixBody.innerHTML = proxyServices.map(p => `
           <tr>
-            <td style="font-weight: 600; font-family: var(--font-mono); font-size: 13px;">${t.table}</td>
-            <td>${acts}</td>
             <td>
-              <span class="code">${readableCount} readable columns</span>
-              ${writableCount > 0 ? `<br><span class="code" style="color: var(--accent); margin-top: 4px; display:inline-block;">${writableCount} writable columns</span>` : ''}
+              <div style="font-weight: 600; color: #38bdf8;">${escapeHtml(p.name)}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(p.description)}</div>
             </td>
-            <td>${t.rowScope ? `<span class="code">${t.rowScope.column} = user_id</span>` : '<span style="color: var(--text-muted);">None (Full Table Scope)</span>'}</td>
+            <td>
+              ${p.endpoints.map(ep => `<div style="font-family: var(--font-mono); font-size: 12px; margin-bottom: 2px;"><span class="method ${ep.method.toLowerCase()}">${ep.method}</span> <b>${ep.path}</b></div>`).join('')}
+            </td>
+            <td><span class="badge healthy">Full Access</span></td>
+            <td><a href="${p.baseUrl}" target="_blank" style="color: #60a5fa; font-family: var(--font-mono); font-size: 12px;">${p.baseUrl}</a></td>
           </tr>
-        `;
-      }).join('');
-
-      // Render Sidebar
-      const sidebar = document.getElementById('tableNavLinks');
-      sidebar.innerHTML = data.tables.map(t => `
-        <a href="javascript:void(0)" class="menu-item ${t.table === selectedTable ? 'active' : ''}" onclick="selectDocTable('${t.table}')">
-          ${t.table}
-          <div style="font-size: 11px; opacity: 0.6; margin-top: 2px;">${t.actions.join(', ')}</div>
-        </a>
-      `).join('');
-
-      // Populate test runner select
-      const select = document.getElementById('testTableSelect');
-      select.innerHTML = data.tables.map(t => `<option value="${t.table}">${t.table}</option>`).join('');
-
-      if (!selectedTable && data.tables.length > 0) {
-        selectedTable = data.tables[0].table;
+        `).join('');
+      } else {
+        proxyCard.style.display = 'none';
       }
 
-      selectDocTable(selectedTable);
+      // 2. Render Database Matrix Table
+      const matrixBody = document.getElementById('matrixTableBody');
+      if (data.tables.length === 0) {
+        matrixBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-muted); padding: 16px;">No database tables assigned to this key.</td></tr>`;
+      } else {
+        matrixBody.innerHTML = data.tables.map(t => {
+          const readableCount = t.columns.readable.length;
+          const writableCount = t.columns.writable.length;
+          const acts = t.actions.map(a => `<span class="method ${a === 'read' ? 'get' : a === 'create' ? 'post' : a === 'update' ? 'patch' : 'delete'}">${a.toUpperCase()}</span>`).join(' ');
+
+          return `
+            <tr>
+              <td style="font-weight: 600; font-family: var(--font-mono); font-size: 13px;">${t.table}</td>
+              <td>${acts}</td>
+              <td>
+                <span class="code">${readableCount} readable columns</span>
+                ${writableCount > 0 ? `<br><span class="code" style="color: var(--accent); margin-top: 4px; display:inline-block;">${writableCount} writable columns</span>` : ''}
+              </td>
+              <td>${t.rowScope ? `<span class="code">${t.rowScope.column} = user_id</span>` : '<span style="color: var(--text-muted);">None (Full Table Scope)</span>'}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      // 3. Render Sidebar Menu (Tables + 3rd-Party APIs)
+      const sidebar = document.getElementById('tableNavLinks');
+      let sidebarHtml = '';
+
+      if (proxyServices.length > 0) {
+        sidebarHtml += `<div style="font-size: 11px; text-transform: uppercase; font-weight: 600; color: #38bdf8; margin-top: 8px; margin-bottom: 6px;">🌐 3rd-Party Services</div>`;
+        sidebarHtml += proxyServices.map(p => `
+          <a href="javascript:void(0)" class="menu-item" onclick="selectDocResource('proxy_${p.id}')">
+            ${escapeHtml(p.name)}
+            <div style="font-size: 11px; opacity: 0.6; margin-top: 2px;">Reverse Proxy</div>
+          </a>
+        `).join('');
+      }
+
+      if (data.tables.length > 0) {
+        sidebarHtml += `<div style="font-size: 11px; text-transform: uppercase; font-weight: 600; color: #10b981; margin-top: 14px; margin-bottom: 6px;">🗄️ Database Tables</div>`;
+        sidebarHtml += data.tables.map(t => `
+          <a href="javascript:void(0)" class="menu-item" onclick="selectDocResource('table_${t.table}')">
+            ${t.table}
+            <div style="font-size: 11px; opacity: 0.6; margin-top: 2px;">${t.actions.join(', ')}</div>
+          </a>
+        `).join('');
+      }
+
+      sidebar.innerHTML = sidebarHtml;
+
+      // 4. Populate test runner select
+      const select = document.getElementById('testTableSelect');
+      let selectHtml = '';
+      if (proxyServices.some(p => p.id === 'calculator')) {
+        selectHtml += `<option value="/v1/settings/ats-addon-price">🌐 ATAP Solar ATS Addon Price</option>`;
+      }
+      data.tables.forEach(t => {
+        selectHtml += `<option value="${t.table}">Table: ${t.table}</option>`;
+      });
+      select.innerHTML = selectHtml;
+
+      // Select first resource
+      if (proxyServices.length > 0) {
+        selectDocResource(`proxy_${proxyServices[0].id}`);
+      } else if (data.tables.length > 0) {
+        selectDocResource(`table_${data.tables[0].table}`);
+      }
+
       renderActiveCodeSnippet();
     }
 
-    function selectDocTable(tbl) {
-      selectedTable = tbl;
+    function selectDocResource(id) {
+      selectedResource = id;
       document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
-      const activeLink = Array.from(document.querySelectorAll('.menu-item')).find(l => l.innerText.includes(tbl));
-      if (activeLink) activeLink.classList.add('active');
 
-      const target = spec.tables.find(t => t.table === tbl);
-      if (!target) return;
+      if (id.startsWith('proxy_')) {
+        const proxyId = id.replace('proxy_', '');
+        const target = (spec.proxyServices || []).find(p => p.id === proxyId);
+        if (!target) return;
 
-      const container = document.getElementById('activeTableDocDetail');
-      container.innerHTML = `
-        <div class="card" style="margin-bottom: 20px;">
-          <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <h2 style="font-size: 20px;">Table: <span class="code" style="color: var(--accent);">${target.table}</span></h2>
-            <div style="display: flex; gap: 6px;">
-              ${target.actions.map(a => `<span class="method ${a === 'read' ? 'get' : a === 'create' ? 'post' : a === 'update' ? 'patch' : 'delete'}">${a.toUpperCase()}</span>`).join(' ')}
+        const container = document.getElementById('activeTableDocDetail');
+        container.innerHTML = `
+          <div class="card" style="margin-bottom: 20px;">
+            <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h2 style="font-size: 20px;">3rd-Party Service: <span class="code" style="color: #38bdf8;">${escapeHtml(target.name)}</span></h2>
+              <span class="badge healthy">Active</span>
+            </div>
+            <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">
+              ${escapeHtml(target.description)} Upstream URL: <a href="${target.baseUrl}" target="_blank" style="color: #60a5fa;">${target.baseUrl}</a>
+            </p>
+
+            <h3 style="font-size: 15px; margin-top: 16px; margin-bottom: 10px;">Available Gateway Endpoints</h3>
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+              ${target.endpoints.map(ep => `
+                <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                      <span class="method ${ep.method.toLowerCase()}">${ep.method}</span>
+                      <span style="font-family: var(--font-mono); font-size: 13px; font-weight: 600;">${ep.path}</span>
+                    </div>
+                  </div>
+                  <div style="color: var(--text-muted); font-size: 12px;">${ep.description}</div>
+                </div>
+              `).join('')}
+            </div>
+
+            <h3 style="font-size: 15px; margin-top: 20px; margin-bottom: 10px;">Payload Specification (Update ATS Price)</h3>
+            <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 12px;">
+              <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">PUT Request Body (JSON):</div>
+              <pre><code>{
+  "price": 1500
+}</code></pre>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 10px; margin-bottom: 6px;">Expected Response (200 OK):</div>
+              <pre><code>{
+  "success": true,
+  "data": {
+    "key": "ats_addon_price",
+    "price": 1500,
+    "currency": "MYR",
+    "updatedAt": "2026-10-07T05:15:33.172Z"
+  }
+}</code></pre>
             </div>
           </div>
+        `;
+      } else {
+        const tbl = id.replace('table_', '');
+        const target = spec.tables.find(t => t.table === tbl);
+        if (!target) return;
 
-          <h3 style="font-size: 14px; margin-top: 16px; margin-bottom: 8px;">Available Endpoints</h3>
-          <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
-            ${target.endpoints.map(ep => `
-              <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <span class="method ${ep.method.toLowerCase()}">${ep.method}</span>
-                  <span style="font-family: var(--font-mono); font-size: 13px;">${ep.path}</span>
-                </div>
-                <div style="color: var(--text-muted); font-size: 12px;">${ep.description}</div>
+        const container = document.getElementById('activeTableDocDetail');
+        container.innerHTML = `
+          <div class="card" style="margin-bottom: 20px;">
+            <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h2 style="font-size: 20px;">Table: <span class="code" style="color: var(--accent);">${target.table}</span></h2>
+              <div style="display: flex; gap: 6px;">
+                ${target.actions.map(a => `<span class="method ${a === 'read' ? 'get' : a === 'create' ? 'post' : a === 'update' ? 'patch' : 'delete'}">${a.toUpperCase()}</span>`).join(' ')}
               </div>
-            `).join('')}
-          </div>
+            </div>
 
-          <h3 style="font-size: 14px; margin-top: 20px; margin-bottom: 8px;">Response Columns Schema (${target.columns.readable.length} fields)</h3>
-          <div class="table-container" style="margin-bottom: 20px;">
-            <table>
-              <thead>
-                <tr>
-                  <th>Field</th>
-                  <th>DB Type</th>
-                  <th>JSON Type</th>
-                  <th>Nullable</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${target.columns.readable.map(c => `
-                  <tr>
-                    <td style="font-weight: 600; font-family: var(--font-mono);">${c.name}</td>
-                    <td><span class="schema-tag type">${c.dataType}</span></td>
-                    <td><span class="code">${c.jsonType}</span></td>
-                    <td>${c.isNullable ? '<span class="schema-tag opt">Nullable</span>' : '<span class="schema-tag req">Not Null</span>'}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
+            <h3 style="font-size: 14px; margin-top: 16px; margin-bottom: 8px;">Available Endpoints</h3>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
+              ${target.endpoints.map(ep => `
+                <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <span class="method ${ep.method.toLowerCase()}">${ep.method}</span>
+                    <span style="font-family: var(--font-mono); font-size: 13px;">${ep.path}</span>
+                  </div>
+                  <div style="color: var(--text-muted); font-size: 12px;">${ep.description}</div>
+                </div>
+              `).join('')}
+            </div>
 
-          ${target.columns.writable.length > 0 ? `
-            <h3 style="font-size: 14px; margin-top: 20px; margin-bottom: 8px;">Writable Payload Fields (${target.columns.writable.length} fields)</h3>
-            <div class="table-container">
+            <h3 style="font-size: 14px; margin-top: 20px; margin-bottom: 8px;">Response Columns Schema (${target.columns.readable.length} fields)</h3>
+            <div class="table-container" style="margin-bottom: 20px;">
               <table>
                 <thead>
                   <tr>
                     <th>Field</th>
                     <th>DB Type</th>
                     <th>JSON Type</th>
-                    <th>Required</th>
+                    <th>Nullable</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${target.columns.writable.map(c => `
+                  ${target.columns.readable.map(c => `
                     <tr>
                       <td style="font-weight: 600; font-family: var(--font-mono);">${c.name}</td>
                       <td><span class="schema-tag type">${c.dataType}</span></td>
                       <td><span class="code">${c.jsonType}</span></td>
-                      <td>${c.isNullable ? '<span class="schema-tag opt">Optional</span>' : '<span class="schema-tag req">Required</span>'}</td>
+                      <td>${c.isNullable ? '<span class="schema-tag opt">Nullable</span>' : '<span class="schema-tag req">Not Null</span>'}</td>
                     </tr>
                   `).join('')}
                 </tbody>
               </table>
             </div>
-          ` : ''}
-        </div>
-      `;
+
+            ${target.columns.writable.length > 0 ? `
+              <h3 style="font-size: 14px; margin-top: 20px; margin-bottom: 8px;">Writable Payload Fields (${target.columns.writable.length} fields)</h3>
+              <div class="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Field</th>
+                      <th>DB Type</th>
+                      <th>JSON Type</th>
+                      <th>Required</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${target.columns.writable.map(c => `
+                      <tr>
+                        <td style="font-weight: 600; font-family: var(--font-mono);">${c.name}</td>
+                        <td><span class="schema-tag type">${c.dataType}</span></td>
+                        <td><span class="code">${c.jsonType}</span></td>
+                        <td>${c.isNullable ? '<span class="schema-tag opt">Optional</span>' : '<span class="schema-tag req">Required</span>'}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }
+
+      renderActiveCodeSnippet();
+    }
+
+    function handleTestTargetChange() {
+      const val = document.getElementById('testTableSelect').value;
+      const queryInput = document.getElementById('testQueryInput');
+      if (val.startsWith('/')) {
+        queryInput.value = '';
+        queryInput.placeholder = 'Optional query params';
+      } else {
+        queryInput.value = 'limit=2';
+        queryInput.placeholder = 'Query params (e.g. limit=5&sort=id)';
+      }
     }
 
     function switchCodeSnippet(lang) {
@@ -476,65 +622,84 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
     }
 
     function renderActiveCodeSnippet() {
-      if (!spec || !spec.tables || spec.tables.length === 0) return;
-      const tbl = selectedTable || spec.tables[0].table;
       const origin = window.location.origin;
       const keyStr = rawSecret || 'YOUR_API_KEY';
       let code = '';
 
-      if (currentCodeLang === 'curl') {
-        code = `# 1. List records with pagination and sorting
+      if (selectedResource.startsWith('proxy_calculator') || (!selectedResource && (spec?.proxyServices || []).length > 0)) {
+        if (currentCodeLang === 'curl') {
+          code = `# 1. Update ATAP Solar Calculator ATS Addon Price
+curl -X PUT "${origin}/v1/settings/ats-addon-price" \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: ${keyStr}" \\
+  -d '{"price": 1500}'
+
+# 2. Get current ATS Addon Price
+curl -X GET "${origin}/v1/settings/ats-addon-price" \\
+  -H "x-api-key: ${keyStr}"`;
+        } else if (currentCodeLang === 'js') {
+          code = `// Update ATS Add-on Price via Eternalgy Gateway
+async function updateAtsAddonPrice(newPrice) {
+  const res = await fetch("${origin}/v1/settings/ats-addon-price", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": "${keyStr}"
+    },
+    body: JSON.stringify({ price: newPrice })
+  });
+
+  const data = await res.json();
+  console.log("Updated ATS Add-on:", data);
+}
+
+updateAtsAddonPrice(1500);`;
+        } else if (currentCodeLang === 'python') {
+          code = `# Python requests
+import requests
+
+url = "${origin}/v1/settings/ats-addon-price"
+headers = {
+    "Content-Type": "application/json",
+    "x-api-key": "${keyStr}"
+}
+payload = {"price": 1500}
+
+response = requests.put(url, headers=headers, json=payload)
+print(response.json())`;
+        }
+      } else {
+        const tbl = selectedResource.replace('table_', '') || (spec?.tables[0]?.table || 'product');
+        if (currentCodeLang === 'curl') {
+          code = `# 1. List records with pagination
 curl "${origin}/v1/data/${tbl}?limit=20&offset=0&sort=id&order=asc" \\
   -H "x-api-key: ${keyStr}"
 
 # 2. Retrieve single record by ID
 curl "${origin}/v1/data/${tbl}/1" \\
   -H "x-api-key: ${keyStr}"`;
-      } else if (currentCodeLang === 'js') {
-        code = `// JavaScript (Node.js / Browser Fetch)
-async function fetch${tbl}() {
+        } else if (currentCodeLang === 'js') {
+          code = `async function fetch${tbl}() {
   const response = await fetch("${origin}/v1/data/${tbl}?limit=20", {
-    headers: {
-      "x-api-key": "${keyStr}"
-    }
+    headers: { "x-api-key": "${keyStr}" }
   });
-
-  if (!response.ok) {
-    throw new Error(\`Request failed with status \${response.status}\`);
-  }
-
-  const { data, count } = await response.json();
-  console.log(\`Retrieved \${count} records:\`, data);
+  const json = await response.json();
+  console.log(json);
 }
-
 fetch${tbl}();`;
-      } else if (currentCodeLang === 'python') {
-        code = `# Python (requests)
-import requests
+        } else if (currentCodeLang === 'python') {
+          code = `import requests
 
-url = "${origin}/v1/data/${tbl}"
-headers = {
-    "x-api-key": "${keyStr}"
-}
-params = {
-    "limit": 20,
-    "offset": 0
-}
-
-response = requests.get(url, headers=headers, params=params)
-if response.status_code == 200:
-    payload = response.json()
-    print(f"Retrieved {payload.get('count')} records:")
-    print(payload.get('data'))
-else:
-    print(f"Error {response.status_code}: {response.text}")`;
+res = requests.get("${origin}/v1/data/${tbl}", headers={"x-api-key": "${keyStr}"}, params={"limit": 20})
+print(res.json())`;
+        }
       }
 
       document.getElementById('activeSnippetCode').innerHTML = `<code>${escapeHtml(code)}</code>`;
     }
 
     async function executeLiveTest() {
-      const tbl = document.getElementById('testTableSelect').value;
+      const target = document.getElementById('testTableSelect').value;
       const q = document.getElementById('testQueryInput').value.trim();
       const output = document.getElementById('testResponseBox');
       output.innerText = 'Executing query...';
@@ -545,8 +710,12 @@ else:
         return;
       }
 
+      const targetUrl = target.startsWith('/')
+        ? `${target}${q ? (target.includes('?') ? '&' : '?') + q : ''}`
+        : `/v1/data/${target}?${q}`;
+
       try {
-        const res = await fetch(`/v1/data/${tbl}?${q}`, {
+        const res = await fetch(targetUrl, {
           headers: { 'x-api-key': keyToUse }
         });
         const json = await res.json();
