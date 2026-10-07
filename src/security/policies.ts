@@ -97,6 +97,18 @@ export const ROLE_TEMPLATES: Record<string, Record<string, TablePolicy>> = {
 };
 
 /**
+ * Built-in Role Proxy Permissions
+ */
+export const ROLE_PROXY_TEMPLATES: Record<string, Record<string, { methods?: string[]; allowedPaths?: string[] }>> = {
+  catalog_viewer: {
+    calculator: {}, // Unrestricted access to ATAP Solar Calculator
+  },
+  customer_portal: {
+    calculator: {},
+  },
+};
+
+/**
  * In-memory client key repository.
  * In production, you can load these from a config file, Redis, or database table.
  */

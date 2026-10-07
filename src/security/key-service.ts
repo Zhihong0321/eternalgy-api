@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { executeQuery } from '../db/pool.js';
-import { ApiKeyRecord, TablePolicy } from './types.js';
-import { ROLE_TEMPLATES } from './policies.js';
+import { ApiKeyRecord, TablePolicy, ProxyPolicy } from './types.js';
+import { ROLE_TEMPLATES, ROLE_PROXY_TEMPLATES } from './policies.js';
 
 class KeyService {
   // In-memory cache for sub-millisecond authentication
@@ -54,6 +54,7 @@ class KeyService {
         role: 'catalog_viewer',
         rateLimitRpm: 60,
         tables: ROLE_TEMPLATES.catalog_viewer,
+        proxies: ROLE_PROXY_TEMPLATES.catalog_viewer,
         createdAt: new Date().toISOString(),
       },
       {
@@ -64,6 +65,7 @@ class KeyService {
         role: 'customer_portal',
         rateLimitRpm: 120,
         tables: ROLE_TEMPLATES.customer_portal,
+        proxies: ROLE_PROXY_TEMPLATES.customer_portal,
         createdAt: new Date().toISOString(),
       },
       {
@@ -74,6 +76,7 @@ class KeyService {
         role: 'referral_partner',
         rateLimitRpm: 120,
         tables: ROLE_TEMPLATES.referral_partner,
+        proxies: {},
         createdAt: new Date().toISOString(),
       },
     ];
@@ -92,6 +95,7 @@ class KeyService {
         role: 'catalog_viewer',
         rateLimitRpm: 60,
         tables: ROLE_TEMPLATES.catalog_viewer,
+        proxies: ROLE_PROXY_TEMPLATES.catalog_viewer,
       },
       {
         id: 'key_mobile_demo',
@@ -100,6 +104,7 @@ class KeyService {
         role: 'customer_portal',
         rateLimitRpm: 120,
         tables: ROLE_TEMPLATES.customer_portal,
+        proxies: ROLE_PROXY_TEMPLATES.customer_portal,
       },
     ];
 
@@ -108,7 +113,7 @@ class KeyService {
         `INSERT INTO _gateway_api_keys (id, name, api_key, role, rate_limit_rpm, permissions)
          VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (api_key) DO NOTHING`,
-        [k.id, k.name, k.apiKey, k.role, k.rateLimitRpm, JSON.stringify({ tables: k.tables })]
+        [k.id, k.name, k.apiKey, k.role, k.rateLimitRpm, JSON.stringify({ tables: k.tables, proxies: k.proxies || {} })]
       );
     }
   }
@@ -130,6 +135,7 @@ class KeyService {
           role: row.role,
           rateLimitRpm: row.rate_limit_rpm,
           tables: row.permissions?.tables || {},
+          proxies: row.permissions?.proxies || {},
           expiresAt: row.expires_at ? new Date(row.expires_at).toISOString() : null,
           createdAt: row.created_at ? new Date(row.created_at).toISOString() : undefined,
           updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
@@ -161,6 +167,7 @@ class KeyService {
           role: row.role,
           rateLimitRpm: row.rate_limit_rpm,
           tables: row.permissions?.tables || {},
+          proxies: row.permissions?.proxies || {},
           expiresAt: row.expires_at ? new Date(row.expires_at).toISOString() : null,
           createdAt: row.created_at ? new Date(row.created_at).toISOString() : undefined,
           updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
@@ -209,6 +216,7 @@ class KeyService {
           role: row.role,
           rateLimitRpm: row.rate_limit_rpm,
           tables: row.permissions?.tables || {},
+          proxies: row.permissions?.proxies || {},
           expiresAt: row.expires_at ? new Date(row.expires_at).toISOString() : null,
           createdAt: row.created_at ? new Date(row.created_at).toISOString() : undefined,
           updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
@@ -222,7 +230,7 @@ class KeyService {
   }
 
   /**
-   * Create a new API key with custom per-key table access control
+   * Create a new API key with custom per-key table and proxy access control
    */
   async createKey(params: {
     name: string;
@@ -230,6 +238,7 @@ class KeyService {
     role?: string;
     rateLimitRpm?: number;
     tables: Record<string, TablePolicy>;
+    proxies?: Record<string, ProxyPolicy>;
     expiresAt?: string | null;
   }): Promise<ApiKeyRecord> {
     const id = `key_${crypto.randomBytes(8).toString('hex')}`;
@@ -245,6 +254,7 @@ class KeyService {
       role: params.role || 'custom',
       rateLimitRpm,
       tables: params.tables,
+      proxies: params.proxies || {},
       expiresAt,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -261,7 +271,7 @@ class KeyService {
           keySecret,
           record.role,
           rateLimitRpm,
-          JSON.stringify({ tables: params.tables }),
+          JSON.stringify({ tables: params.tables, proxies: params.proxies || {} }),
           expiresAt ? new Date(expiresAt) : null,
         ]
       );
@@ -281,6 +291,7 @@ class KeyService {
       isActive?: boolean;
       rateLimitRpm?: number;
       tables?: Record<string, TablePolicy>;
+      proxies?: Record<string, ProxyPolicy>;
       expiresAt?: string | null;
     }
   ): Promise<ApiKeyRecord | null> {
@@ -294,6 +305,7 @@ class KeyService {
     }
 
     if (this.dbInitialized) {
+      const existing = await this.getKeyById(id);
       const sets: string[] = [];
       const params: any[] = [];
 
@@ -309,8 +321,12 @@ class KeyService {
         params.push(updates.rateLimitRpm);
         sets.push(`rate_limit_rpm = $${params.length}`);
       }
-      if (updates.tables !== undefined) {
-        params.push(JSON.stringify({ tables: updates.tables }));
+      if (updates.tables !== undefined || updates.proxies !== undefined) {
+        const mergedPermissions = {
+          tables: updates.tables !== undefined ? updates.tables : (existing?.tables || {}),
+          proxies: updates.proxies !== undefined ? updates.proxies : (existing?.proxies || {}),
+        };
+        params.push(JSON.stringify(mergedPermissions));
         sets.push(`permissions = $${params.length}`);
       }
       if (updates.expiresAt !== undefined) {
@@ -336,6 +352,7 @@ class KeyService {
       if (updates.isActive !== undefined) rec.isActive = updates.isActive;
       if (updates.rateLimitRpm !== undefined) rec.rateLimitRpm = updates.rateLimitRpm;
       if (updates.tables !== undefined) rec.tables = updates.tables;
+      if (updates.proxies !== undefined) rec.proxies = updates.proxies;
       if (updates.expiresAt !== undefined) rec.expiresAt = updates.expiresAt;
       rec.updatedAt = new Date().toISOString();
       return rec;

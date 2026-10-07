@@ -30,6 +30,7 @@
     <!-- Navigation Tabs -->
     <nav class="nav-tabs">
       <button class="tab-btn active" data-tab="keysTab">🔑 API Keys & Permissions</button>
+      <button class="tab-btn" data-tab="proxiesTab">🌐 3rd-Party APIs</button>
       <button class="tab-btn" data-tab="logsTab">📜 Live API Logs</button>
       <button class="tab-btn" data-tab="debugTab">🛠️ Diagnostics & Debug</button>
     </nav>
@@ -48,19 +49,19 @@
           <div class="card">
             <div class="card-title">Active Keys</div>
             <div class="card-value" id="statActiveKeys" style="color: var(--accent);">0</div>
-            <div class="card-desc">Currently permitted to query database</div>
+            <div class="card-desc">Currently permitted to query resources</div>
           </div>
           <div class="card">
-            <div class="card-title">Database Integration</div>
-            <div class="card-value" style="font-size: 18px; color: #60a5fa;">Railway Internal</div>
-            <div class="card-desc">Direct private network (prod_main)</div>
+            <div class="card-title">Gateway Integration</div>
+            <div class="card-value" style="font-size: 18px; color: #60a5fa;">PostgreSQL & Proxies</div>
+            <div class="card-desc">Direct DB + 3rd-Party APIs</div>
           </div>
         </div>
 
         <div class="pane-header">
           <div>
             <h2 class="pane-title">Access Control & API Keys</h2>
-            <p class="pane-desc">Manage per-API-key table permissions, rate limits, and access revocations.</p>
+            <p class="pane-desc">Manage per-API-key table permissions, 3rd-party proxy access, rate limits, and revocations.</p>
           </div>
           <button class="btn primary" onclick="openModal('createKeyModal')">+ Create API Key</button>
         </div>
@@ -73,24 +74,72 @@
                 <th>API Key Secret</th>
                 <th>Active</th>
                 <th>Rate Limit</th>
-                <th>Permitted Tables</th>
+                <th>Database Tables</th>
+                <th>3rd-Party APIs</th>
                 <th>Last Active</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody id="keysTableBody">
-              <tr><td colspan="7" style="text-align:center; padding: 20px;">Loading keys...</td></tr>
+              <tr><td colspan="8" style="text-align:center; padding: 20px;">Loading keys...</td></tr>
             </tbody>
           </table>
         </div>
       </section>
 
-      <!-- TAB 2: AUDIT LOGS -->
+      <!-- TAB 2: 3RD-PARTY PROXIES -->
+      <section id="proxiesTab" class="tab-pane">
+        <div class="grid-cards">
+          <div class="card">
+            <div class="card-title">Registered Services</div>
+            <div class="card-value" id="statTotalProxies">0</div>
+            <div class="card-desc">External vendor APIs cloaked</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Active Upstream Gateways</div>
+            <div class="card-value" id="statActiveProxies" style="color: var(--accent);">0</div>
+            <div class="card-desc">Available for team key routing</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Central Proxy Endpoint</div>
+            <div class="card-value" style="font-size: 16px; font-family: var(--font-mono); color: #38bdf8;">/api/proxy/:service/*</div>
+            <div class="card-desc">Team uses 1 Eternalgy key</div>
+          </div>
+        </div>
+
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title">3rd-Party API Integrations (Reverse Proxy)</h2>
+            <p class="pane-desc">Configure upstream services and secret keys. The gateway forwards calls and injects vendor credentials automatically.</p>
+          </div>
+          <button class="btn primary" onclick="openModal('registerProxyModal')">+ Register 3rd-Party API</button>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Service ID</th>
+                <th>Service Name</th>
+                <th>Target Base URL</th>
+                <th>Injected Upstream Credentials</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="proxiesTableBody">
+              <tr><td colspan="6" style="text-align:center; padding: 20px;">Loading proxy services...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 3: AUDIT LOGS -->
       <section id="logsTab" class="tab-pane">
         <div class="pane-header">
           <div>
             <h2 class="pane-title">Live API Audit Logs</h2>
-            <p class="pane-desc">Real-time log buffer of all queries, latencies, and security rejections.</p>
+            <p class="pane-desc">Real-time log buffer of all queries, proxy calls, latencies, and security rejections.</p>
           </div>
           <div style="display: flex; gap: 10px;">
             <select id="logStatusFilter" class="form-select" style="width: 140px; padding: 6px 10px; font-size: 12px;" onchange="loadLogs()">
@@ -99,7 +148,7 @@
               <option value="4xx">4xx Auth/Denied</option>
               <option value="5xx">5xx Errors</option>
             </select>
-            <button class="btn sm" onclick="loadLogs()">Refresh Logs</button>
+            <button class="btn sm" onclick="loadLogs()">Refresh</button>
           </div>
         </div>
 
@@ -108,25 +157,26 @@
             <thead>
               <tr>
                 <th>Timestamp</th>
-                <th>Method</th>
                 <th>Status</th>
-                <th>Path</th>
-                <th>Key Identity</th>
+                <th>Method</th>
+                <th>Endpoint / Route</th>
+                <th>Caller Key</th>
                 <th>Duration</th>
+                <th>IP Address</th>
               </tr>
             </thead>
             <tbody id="logsTableBody">
-              <tr><td colspan="6" style="text-align:center; padding: 20px;">Loading logs...</td></tr>
+              <tr><td colspan="7" style="text-align:center; padding: 20px;">Loading audit logs...</td></tr>
             </tbody>
           </table>
         </div>
       </section>
 
-      <!-- TAB 3: DIAGNOSTICS & DEBUG -->
+      <!-- TAB 4: DIAGNOSTICS & DEBUG -->
       <section id="debugTab" class="tab-pane">
         <div class="pane-header">
           <div>
-            <h2 class="pane-title">System Diagnostics & Debug Layer</h2>
+            <h2 class="pane-title">System Diagnostics & Health</h2>
             <p class="pane-desc">Deep introspection for administrators and AI assistants.</p>
           </div>
           <button class="btn sm" onclick="loadDiagnostics()">Refresh Diagnostics</button>
@@ -172,16 +222,16 @@
 
   <!-- MODAL: CREATE API KEY -->
   <div id="createKeyModal" class="modal-overlay">
-    <div class="modal">
+    <div class="modal" style="max-width: 650px;">
       <div class="modal-header">
-        <h3 style="font-size: 16px;">Create New API Key</h3>
+        <h3 style="font-size: 16px;">Create New Team / Client API Key</h3>
         <button class="btn sm" onclick="closeModal('createKeyModal')">✕</button>
       </div>
       <form onsubmit="handleCreateKey(event)">
-        <div class="modal-body">
+        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
           <div class="form-group">
-            <label class="form-label">Client / App Name</label>
-            <input type="text" id="newKeyName" class="form-input" placeholder="e.g. Mobile iOS Client or Solar Partner XYZ" required>
+            <label class="form-label">Client / App / Team Member Name</label>
+            <input type="text" id="newKeyName" class="form-input" placeholder="e.g. John Doe, Mobile iOS App, or Solar Partner" required>
           </div>
 
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
@@ -190,17 +240,33 @@
               <input type="number" id="newKeyRpm" class="form-input" value="120" min="10" max="1000">
             </div>
             <div class="form-group">
-              <label class="form-label">Custom API Key (Optional)</label>
+              <label class="form-label">Custom API Key Token (Optional)</label>
               <input type="text" id="newCustomKey" class="form-input" placeholder="Leave blank to auto-generate">
             </div>
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Table Access Permissions</label>
-            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
-              Select the tables this key is authorized to access and choose allowed actions.
+          <!-- SECTION 1: 3RD-PARTY PROXY PERMISSIONS -->
+          <div class="form-group" style="margin-top: 10px;">
+            <label class="form-label" style="display: flex; align-items: center; gap: 6px; color: #38bdf8;">
+              🌐 3rd-Party API Permissions (Reverse Proxy)
+            </label>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
+              Select which 3rd-party APIs this key can access through <code>/api/proxy/:service/*</code>.
             </p>
-            <div id="tableRulesContainer" style="max-height: 300px; overflow-y: auto; padding-right: 4px;">
+            <div id="proxyRulesContainer" style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; margin-bottom: 16px;">
+              Loading proxy services...
+            </div>
+          </div>
+
+          <!-- SECTION 2: POSTGRES TABLE PERMISSIONS -->
+          <div class="form-group">
+            <label class="form-label" style="display: flex; align-items: center; gap: 6px; color: #10b981;">
+              🗄️ PostgreSQL Table Access
+            </label>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
+              Select internal database tables this key is authorized to query.
+            </p>
+            <div id="tableRulesContainer" style="max-height: 250px; overflow-y: auto; padding-right: 4px;">
               Loading tables...
             </div>
           </div>
@@ -208,6 +274,55 @@
         <div class="modal-footer">
           <button type="button" class="btn" onclick="closeModal('createKeyModal')">Cancel</button>
           <button type="submit" class="btn primary">Generate Key</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: REGISTER 3RD-PARTY PROXY SERVICE -->
+  <div id="registerProxyModal" class="modal-overlay">
+    <div class="modal" style="max-width: 550px;">
+      <div class="modal-header">
+        <h3 style="font-size: 16px;">Register 3rd-Party Upstream API</h3>
+        <button class="btn sm" onclick="closeModal('registerProxyModal')">✕</button>
+      </div>
+      <form onsubmit="handleRegisterProxy(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Service Slug / ID (Used in URL)</label>
+            <input type="text" id="proxySlugInput" class="form-input" placeholder="e.g. calculator or open-meteo" required style="font-family: var(--font-mono);">
+            <small style="color: var(--text-muted); font-size: 11px;">Accessed via: <code>/api/proxy/{slug}/*</code></small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Display Name</label>
+            <input type="text" id="proxyNameInput" class="form-input" placeholder="e.g. ATAP Solar Calculator API" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Upstream Base URL</label>
+            <input type="url" id="proxyBaseUrlInput" class="form-input" placeholder="e.g. https://calculator.atap.solar" required>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label class="form-label">Upstream Auth Header Name</label>
+              <input type="text" id="proxyHeaderKeyInput" class="form-input" placeholder="e.g. X-Api-Key or Authorization" value="X-Api-Key" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Upstream Secret Key / Token</label>
+              <input type="password" id="proxyHeaderValInput" class="form-input" placeholder="e.g. calculator2026" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Description (Optional)</label>
+            <input type="text" id="proxyDescInput" class="form-input" placeholder="e.g. ATAP solar calculator settings and pricing">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" onclick="closeModal('registerProxyModal')">Cancel</button>
+          <button type="submit" class="btn primary">Save & Activate Service</button>
         </div>
       </form>
     </div>
@@ -233,7 +348,7 @@
           <b>Shareable API Docs Portal URL:</b>
         </p>
         <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">
-          Send this link to the developer/client. It exposes only the endpoints and table schemas permitted for this key.
+          Send this link to the developer/team member. It documents both the permitted database tables and 3rd-party proxy endpoints!
         </p>
         <div style="display: flex; gap: 8px; margin-bottom: 12px;">
           <input type="text" id="createdDocUrl" class="form-input" readonly style="font-family: var(--font-mono); font-size: 12px; background: #000;">

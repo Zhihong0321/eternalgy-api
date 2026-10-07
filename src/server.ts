@@ -14,7 +14,9 @@ import { dataRoutes } from './routes/data.js';
 import { adminRoutes } from './routes/admin.js';
 import { debugRoutes } from './routes/debug.js';
 import { keyDocsRoutes } from './routes/key-docs.js';
+import { proxyRoutes } from './routes/proxy.js';
 import { keyService } from './security/key-service.js';
+import { proxyService } from './security/proxy-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,6 +24,8 @@ const __dirname = path.dirname(__filename);
 export async function buildServer() {
   // Initialize Per-API-Key store & cache
   await keyService.initialize();
+  // Initialize 3rd-Party Proxy Service store & cache
+  await proxyService.initialize();
 
   const app = Fastify({
     logger: {
@@ -106,6 +110,7 @@ export async function buildServer() {
   await app.register(adminRoutes);
   await app.register(debugRoutes);
   await app.register(keyDocsRoutes);
+  await app.register(proxyRoutes);
 
   // Custom 404 handler
   app.setNotFoundHandler((_req, reply) => {

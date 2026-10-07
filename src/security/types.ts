@@ -22,6 +22,24 @@ export interface TablePolicy {
   rowScope?: RowScopeConstraint;
 }
 
+export interface ProxyPolicy {
+  /** Optional allowed HTTP methods, e.g. ['GET', 'PUT', 'POST']. If omitted, all methods allowed. */
+  methods?: string[];
+  /** Optional allowed path prefixes, e.g. ['/api/v1/settings/*']. If omitted, all paths allowed. */
+  allowedPaths?: string[];
+}
+
+export interface UpstreamServiceRecord {
+  id: string;
+  name: string;
+  baseUrl: string;
+  headers?: Record<string, string>;
+  description?: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 /**
  * Per-API-Key Access Control Model
  */
@@ -33,6 +51,7 @@ export interface ApiKeyRecord {
   role?: string;
   rateLimitRpm: number;
   tables: Record<string, TablePolicy>;
+  proxies?: Record<string, ProxyPolicy>;
   expiresAt?: string | null;
   createdAt?: string;
   updatedAt?: string;

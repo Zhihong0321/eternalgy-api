@@ -169,6 +169,7 @@ export async function keyDocsRoutes(app: FastifyInstance) {
       rateLimitRpm: key.rateLimitRpm,
       allowedTablesCount: tableSchemas.length,
       tables: tableSchemas,
+      proxies: key.proxies || {},
     };
   });
 
@@ -348,6 +349,35 @@ export async function keyDocsRoutes(app: FastifyInstance) {
             },
           },
         };
+      }
+    }
+
+    if (key.proxies) {
+      for (const [serviceId, policy] of Object.entries(key.proxies)) {
+        const proxyPath = `/api/proxy/${serviceId}/{subpath}`;
+        const methods = (policy.methods && policy.methods.length > 0)
+          ? policy.methods.map((m) => m.toLowerCase())
+          : ['get', 'post', 'put', 'patch', 'delete'];
+
+        paths[proxyPath] = {};
+        for (const m of methods) {
+          paths[proxyPath][m] = {
+            tags: ['Proxy: ' + serviceId],
+            summary: `Proxy ${m.toUpperCase()} request to upstream service '${serviceId}'`,
+            parameters: [
+              {
+                name: 'subpath',
+                in: 'path',
+                required: true,
+                schema: { type: 'string' },
+                description: `Wildcard path forwarded directly to ${serviceId}`,
+              },
+            ],
+            responses: {
+              200: { description: 'Upstream response forwarded by Eternalgy Gateway' },
+            },
+          };
+        }
       }
     }
 

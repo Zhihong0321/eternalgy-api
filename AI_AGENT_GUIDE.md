@@ -141,3 +141,50 @@ GET /api/admin/tables
 Header: x-admin-secret: <ADMIN_API_KEY>
 ```
 **AI Behavior**: Call this before issuing a key to confirm exact table names.
+
+---
+
+## 🌐 5. 3rd-Party API Routing & Proxy Layer (Single Key Access)
+
+Eternalgy API acts as a unified reverse proxy and credential vault for external APIs. Clients only provide their **1 Eternalgy API key**; the gateway injects the vendor credentials and strips internal headers.
+
+### A. List Registered Upstream Services
+```http
+GET /api/admin/proxy-services
+Header: x-admin-secret: <ADMIN_API_KEY>
+```
+
+### B. Register a New 3rd-Party Upstream Service
+```http
+POST /api/admin/proxy-services
+Header: x-admin-secret: <ADMIN_API_KEY>
+Content-Type: application/json
+
+{
+  "id": "calculator",
+  "name": "ATAP Solar Calculator",
+  "baseUrl": "https://calculator.atap.solar",
+  "headers": {
+    "X-Api-Key": "calculator2026"
+  },
+  "description": "ATAP Solar Calculator settings & pricing API"
+}
+```
+
+### C. How Team Members Call 3rd-Party Services
+Team members call `/api/proxy/:service/*` with their **Eternalgy API Key**:
+```bash
+# Example: Updating solar calculator add-on price
+curl -X PUT https://<your-eternalgy-host>/api/proxy/calculator/api/v1/settings/ats-addon-price \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: eter_live_xxxxxxxxxxxxxxxx" \
+  -d '{"price": 1500}'
+```
+**Gateway Action**:
+1. Authenticates `x-api-key`.
+2. Validates user has permission for service `calculator`.
+3. Strips internal headers (`x-api-key`, etc.).
+4. Injects `X-Api-Key: calculator2026`.
+5. Forwards request to `https://calculator.atap.solar/api/v1/settings/ats-addon-price`.
+6. Streams response back to client and records call in audit log.
+

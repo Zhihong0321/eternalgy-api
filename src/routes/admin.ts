@@ -1,9 +1,10 @@
 import { FastifyInstance } from 'fastify';
 import { requireAdmin } from '../security/auth-middleware.js';
 import { keyService } from '../security/key-service.js';
+import { proxyService } from '../security/proxy-service.js';
 import { executeQuery } from '../db/pool.js';
 import { getRecentAuditLogs } from '../middleware/audit-logger.js';
-import { TablePolicy } from '../security/types.js';
+import { TablePolicy, ProxyPolicy } from '../security/types.js';
 
 interface CreateKeyBody {
   name: string;
@@ -11,6 +12,7 @@ interface CreateKeyBody {
   role?: string;
   rateLimitRpm?: number;
   tables: Record<string, TablePolicy>;
+  proxies?: Record<string, ProxyPolicy>;
   expiresAt?: string | null;
 }
 
@@ -19,7 +21,17 @@ interface UpdateKeyBody {
   isActive?: boolean;
   rateLimitRpm?: number;
   tables?: Record<string, TablePolicy>;
+  proxies?: Record<string, ProxyPolicy>;
   expiresAt?: string | null;
+}
+
+interface UpsertProxyServiceBody {
+  id: string;
+  name: string;
+  baseUrl: string;
+  headers?: Record<string, string>;
+  description?: string;
+  isActive?: boolean;
 }
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -40,6 +52,7 @@ export async function adminRoutes(app: FastifyInstance) {
       rateLimitRpm: k.rateLimitRpm,
       allowedTables: Object.keys(k.tables),
       tables: k.tables,
+      proxies: k.proxies || {},
       expiresAt: k.expiresAt,
       createdAt: k.createdAt,
       lastUsedAt: k.lastUsedAt,
@@ -52,13 +65,16 @@ export async function adminRoutes(app: FastifyInstance) {
    * POST /api/admin/keys - Issue a new API key with custom per-key table access control
    */
   app.post<{ Body: CreateKeyBody }>('/api/admin/keys', async (request, reply) => {
-    const { name, apiKey, role, rateLimitRpm, tables, expiresAt } = request.body;
+    const { name, apiKey, role, rateLimitRpm, tables, proxies, expiresAt } = request.body;
 
-    if (!name || !tables || typeof tables !== 'object') {
+    const finalTables = tables && typeof tables === 'object' ? tables : {};
+    const finalProxies = proxies && typeof proxies === 'object' ? proxies : {};
+
+    if (!name || (Object.keys(finalTables).length === 0 && Object.keys(finalProxies).length === 0)) {
       return reply.status(400).send({
         statusCode: 400,
         error: 'Bad Request',
-        message: 'Missing required fields: name, tables (object mapping table names to permissions).',
+        message: 'Missing required fields: name, and at least one table or 3rd-party proxy permission.',
       });
     }
 
@@ -67,7 +83,8 @@ export async function adminRoutes(app: FastifyInstance) {
       apiKey,
       role,
       rateLimitRpm,
-      tables,
+      tables: finalTables,
+      proxies: finalProxies,
       expiresAt,
     });
 
@@ -81,6 +98,7 @@ export async function adminRoutes(app: FastifyInstance) {
         role: created.role,
         rateLimitRpm: created.rateLimitRpm,
         tables: created.tables,
+        proxies: created.proxies,
         expiresAt: created.expiresAt,
       },
     });
@@ -146,5 +164,98 @@ export async function adminRoutes(app: FastifyInstance) {
     const limit = Number(request.query.limit) || 50;
     const logs = getRecentAuditLogs(limit);
     return { count: logs.length, logs };
+  });
+
+  /**
+   * GET /api/admin/proxy-services - List all configured 3rd-party upstream services
+   */
+  app.get('/api/admin/proxy-services', async () => {
+    const services = await proxyService.listServices();
+    // Mask sensitive upstream header values
+    const masked = services.map((s) => {
+      const safeHeaders: Record<string, string> = {};
+      if (s.headers) {
+        for (const [k, v] of Object.entries(s.headers)) {
+          if (v && v.length > 8) {
+            safeHeaders[k] = v.slice(0, 4) + '***' + v.slice(-4);
+          } else {
+            safeHeaders[k] = '********';
+          }
+        }
+      }
+      return {
+        ...s,
+        headers: safeHeaders,
+      };
+    });
+    return { total: masked.length, services: masked };
+  });
+
+  /**
+   * POST /api/admin/proxy-services - Register a new 3rd-party upstream service
+   */
+  app.post<{ Body: UpsertProxyServiceBody }>('/api/admin/proxy-services', async (request, reply) => {
+    const { id, name, baseUrl, headers, description, isActive } = request.body;
+
+    if (!id || !name || !baseUrl) {
+      return reply.status(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: 'Missing required fields: id (slug), name, baseUrl.',
+      });
+    }
+
+    const created = await proxyService.registerService({
+      id,
+      name,
+      baseUrl,
+      headers,
+      description,
+      isActive,
+    });
+
+    return reply.status(201).send({
+      message: `Upstream proxy service '${id}' registered successfully.`,
+      service: created,
+    });
+  });
+
+  /**
+   * PATCH /api/admin/proxy-services/:id - Update an existing upstream service
+   */
+  app.patch<{ Params: { id: string }; Body: Partial<UpsertProxyServiceBody> }>(
+    '/api/admin/proxy-services/:id',
+    async (request, reply) => {
+      const { id } = request.params;
+      const updates = request.body;
+
+      const updated = await proxyService.updateService(id, updates);
+      if (!updated) {
+        return reply.status(404).send({
+          statusCode: 404,
+          message: `Proxy service with ID '${id}' not found.`,
+        });
+      }
+
+      return reply.send({
+        message: `Proxy service '${id}' updated successfully.`,
+        service: updated,
+      });
+    }
+  );
+
+  /**
+   * DELETE /api/admin/proxy-services/:id - Delete an upstream proxy service
+   */
+  app.delete<{ Params: { id: string } }>('/api/admin/proxy-services/:id', async (request, reply) => {
+    const { id } = request.params;
+    const deleted = await proxyService.deleteService(id);
+    if (!deleted) {
+      return reply.status(404).send({
+        statusCode: 404,
+        message: `Proxy service with ID '${id}' not found.`,
+      });
+    }
+    return reply.send({ message: `Proxy service '${id}' permanently removed.` });
   });
 }

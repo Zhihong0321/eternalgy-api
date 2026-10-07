@@ -16,6 +16,17 @@ export async function authenticateApiKey(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
+  const adminSecret = request.headers['x-admin-secret'] as string | undefined;
+  if (adminSecret && adminSecret === config.ADMIN_API_KEY) {
+    request.isAdmin = true;
+    request.authContext = {
+      keyId: 'admin_root',
+      clientName: 'Gateway Administrator',
+      role: 'admin',
+    };
+    return;
+  }
+
   const headerKey = request.headers['x-api-key'] as string | undefined;
   const authHeader = request.headers.authorization;
   
