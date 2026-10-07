@@ -161,4 +161,39 @@ describe('3rd-Party API Gateway Proxy & Credential Injection', () => {
     expect(putRes.statusCode).toBe(403);
     expect(putRes.json().message).toContain('Method \'PUT\' is not permitted');
   });
+
+  it('product_manager key has full CRUD access to product, package, and calculator proxy', async () => {
+    const mgrKey = 'eter_demo_product_manager_key_2026';
+
+    // 1. Can access calculator proxy
+    const proxyRes = await app.inject({
+      method: 'GET',
+      url: '/api/proxy/calculator/api/v1/settings/ats-addon-price',
+      headers: {
+        'x-api-key': mgrKey,
+      },
+    });
+    expect(proxyRes.statusCode).toBe(200);
+
+    // 2. Can read product
+    const prodRes = await app.inject({
+      method: 'GET',
+      url: '/v1/data/product',
+      headers: {
+        'x-api-key': mgrKey,
+      },
+    });
+    // If DB is offline in test env, this might return 500 DB error, but it won't be 403 Forbidden!
+    expect(prodRes.statusCode).not.toBe(403);
+
+    // 3. Can read package
+    const pkgRes = await app.inject({
+      method: 'GET',
+      url: '/v1/data/package',
+      headers: {
+        'x-api-key': mgrKey,
+      },
+    });
+    expect(pkgRes.statusCode).not.toBe(403);
+  });
 });

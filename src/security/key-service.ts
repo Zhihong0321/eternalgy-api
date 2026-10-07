@@ -79,6 +79,17 @@ class KeyService {
         proxies: {},
         createdAt: new Date().toISOString(),
       },
+      {
+        id: 'key_prod_mgr_demo',
+        name: 'Product & Package Manager (with ATAP Solar ATS Addon)',
+        apiKey: 'eter_demo_product_manager_key_2026',
+        isActive: true,
+        role: 'product_manager',
+        rateLimitRpm: 120,
+        tables: ROLE_TEMPLATES.product_manager,
+        proxies: ROLE_PROXY_TEMPLATES.product_manager,
+        createdAt: new Date().toISOString(),
+      },
     ];
 
     for (const key of defaultKeys) {
@@ -105,6 +116,15 @@ class KeyService {
         rateLimitRpm: 120,
         tables: ROLE_TEMPLATES.customer_portal,
         proxies: ROLE_PROXY_TEMPLATES.customer_portal,
+      },
+      {
+        id: 'key_prod_mgr_demo',
+        name: 'Product & Package Manager (with ATAP Solar ATS Addon)',
+        apiKey: 'eter_demo_product_manager_key_2026',
+        role: 'product_manager',
+        rateLimitRpm: 120,
+        tables: ROLE_TEMPLATES.product_manager,
+        proxies: ROLE_PROXY_TEMPLATES.product_manager,
       },
     ];
 

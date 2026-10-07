@@ -94,6 +94,16 @@ export const ROLE_TEMPLATES: Record<string, Record<string, TablePolicy>> = {
       actions: ['read'],
     },
   },
+
+  // Product & Package Manager (Full CRUD on product + package)
+  product_manager: {
+    product: {
+      actions: ['read', 'create', 'update', 'delete'],
+    },
+    package: {
+      actions: ['read', 'create', 'update', 'delete'],
+    },
+  },
 };
 
 /**
@@ -104,6 +114,9 @@ export const ROLE_PROXY_TEMPLATES: Record<string, Record<string, { methods?: str
     calculator: {}, // Unrestricted access to ATAP Solar Calculator
   },
   customer_portal: {
+    calculator: {},
+  },
+  product_manager: {
     calculator: {},
   },
 };
