@@ -66,8 +66,39 @@ export async function checkDbHealth(): Promise<{ ok: boolean; latencyMs: number;
 }
 
 /**
+ * Diagnostic pool statistics
+ */
+export function getPoolStats() {
+  return {
+    totalCount: pool.totalCount,
+    idleCount: pool.idleCount,
+    waitingCount: pool.waitingCount,
+    maxConnections: config.DB_MAX_CONNECTIONS,
+  };
+}
+
+/**
+ * Execute query EXPLAIN (FORMAT JSON) for query performance debugging
+ */
+export async function explainQuery(sql: string, params: any[] = []): Promise<any> {
+  const cleanSql = sql.trim();
+  if (!cleanSql.toUpperCase().startsWith('SELECT')) {
+    throw new Error('EXPLAIN is only permitted for SELECT statements.');
+  }
+
+  const client = await pool.connect();
+  try {
+    const res = await client.query(`EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) ${cleanSql}`, params);
+    return res.rows[0]?.['QUERY PLAN'] || res.rows;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Graceful shutdown for pool
  */
 export async function closePool(): Promise<void> {
   await pool.end();
 }
+

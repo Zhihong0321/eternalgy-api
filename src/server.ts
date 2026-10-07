@@ -3,12 +3,20 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import fastifyStatic from '@fastify/static';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { config } from './config/env.js';
 import { registerAuditLogging } from './middleware/audit-logger.js';
 import { healthRoutes } from './routes/health.js';
 import { dataRoutes } from './routes/data.js';
 import { adminRoutes } from './routes/admin.js';
+import { debugRoutes } from './routes/debug.js';
 import { keyService } from './security/key-service.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export async function buildServer() {
   // Initialize Per-API-Key store & cache
@@ -35,6 +43,22 @@ export async function buildServer() {
       const apiKey = (req.headers['x-api-key'] as string) || req.ip;
       return apiKey;
     },
+  });
+
+  // Serve Web Admin UI Static Assets
+  await app.register(fastifyStatic, {
+    root: path.join(__dirname, '../public'),
+    prefix: '/admin/',
+    decorateReply: false,
+  });
+
+  // Root & Admin redirects
+  app.get('/', async (_req, reply) => {
+    return reply.redirect('/admin/');
+  });
+
+  app.get('/admin', async (_req, reply) => {
+    return reply.redirect('/admin/');
   });
 
   // Interactive Swagger Documentation
@@ -79,13 +103,14 @@ export async function buildServer() {
   await app.register(healthRoutes);
   await app.register(dataRoutes);
   await app.register(adminRoutes);
+  await app.register(debugRoutes);
 
   // Custom 404 handler
   app.setNotFoundHandler((_req, reply) => {
     reply.status(404).send({
       statusCode: 404,
       error: 'Not Found',
-      message: 'The requested route does not exist. Check /docs for available endpoints.',
+      message: 'The requested route does not exist. Check /admin/ for console or /docs for API endpoints.',
     });
   });
 

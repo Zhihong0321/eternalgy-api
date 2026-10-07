@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eternalgy API Gateway — Access Control Console</title>
+  <link rel="stylesheet" href="/admin/styles.css">
+  <link rel="icon" href="data:,">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <div class="logo-badge">ETERNALGY</div>
+        <h1>API Gateway Admin</h1>
+      </div>
+      <div class="header-status">
+        <div id="healthBadge" class="badge healthy">
+          <span class="status-dot"></span> Checking DB...
+        </div>
+        <div id="authStatusBadge" class="badge">Checking Auth...</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="password" id="adminSecretInput" placeholder="Enter x-admin-secret" class="form-input" style="width: 220px; padding: 6px 12px; font-size: 13px;">
+          <a href="/docs" target="_blank" class="btn sm">API Docs</a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" data-tab="keysTab">🔑 API Keys & Permissions</button>
+      <button class="tab-btn" data-tab="logsTab">📜 Live API Logs</button>
+      <button class="tab-btn" data-tab="debugTab">🛠️ Diagnostics & Debug</button>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      
+      <!-- TAB 1: API KEYS -->
+      <section id="keysTab" class="tab-pane active">
+        <div class="grid-cards">
+          <div class="card">
+            <div class="card-title">Total Configured Keys</div>
+            <div class="card-value" id="statTotalKeys">0</div>
+            <div class="card-desc">Persistent keys in PostgreSQL</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Active Keys</div>
+            <div class="card-value" id="statActiveKeys" style="color: var(--accent);">0</div>
+            <div class="card-desc">Currently permitted to query database</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Database Integration</div>
+            <div class="card-value" style="font-size: 18px; color: #60a5fa;">Railway Internal</div>
+            <div class="card-desc">Direct private network (prod_main)</div>
+          </div>
+        </div>
+
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title">Access Control & API Keys</h2>
+            <p class="pane-desc">Manage per-API-key table permissions, rate limits, and access revocations.</p>
+          </div>
+          <button class="btn primary" onclick="openModal('createKeyModal')">+ Create API Key</button>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Key Identity</th>
+                <th>API Key Secret</th>
+                <th>Active</th>
+                <th>Rate Limit</th>
+                <th>Permitted Tables</th>
+                <th>Last Active</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="keysTableBody">
+              <tr><td colspan="7" style="text-align:center; padding: 20px;">Loading keys...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 2: AUDIT LOGS -->
+      <section id="logsTab" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title">Live API Audit Logs</h2>
+            <p class="pane-desc">Real-time log buffer of all queries, latencies, and security rejections.</p>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <select id="logStatusFilter" class="form-select" style="width: 140px; padding: 6px 10px; font-size: 12px;" onchange="loadLogs()">
+              <option value="all">All Statuses</option>
+              <option value="2xx">2xx OK</option>
+              <option value="4xx">4xx Auth/Denied</option>
+              <option value="5xx">5xx Errors</option>
+            </select>
+            <button class="btn sm" onclick="loadLogs()">Refresh Logs</button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Method</th>
+                <th>Status</th>
+                <th>Path</th>
+                <th>Key Identity</th>
+                <th>Duration</th>
+              </tr>
+            </thead>
+            <tbody id="logsTableBody">
+              <tr><td colspan="6" style="text-align:center; padding: 20px;">Loading logs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 3: DIAGNOSTICS & DEBUG -->
+      <section id="debugTab" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title">System Diagnostics & Debug Layer</h2>
+            <p class="pane-desc">Deep introspection for administrators and AI assistants.</p>
+          </div>
+          <button class="btn sm" onclick="loadDiagnostics()">Refresh Diagnostics</button>
+        </div>
+
+        <div class="grid-cards">
+          <div class="card">
+            <div class="card-title">Gateway Uptime</div>
+            <div class="card-value" id="diagUptime">--</div>
+            <div class="card-desc">Fastify engine uptime</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Memory Footprint</div>
+            <div class="card-value" id="diagMemory" style="font-size: 18px;">--</div>
+            <div class="card-desc">Process RSS & V8 Heap</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Connection Pool</div>
+            <div class="card-value" id="diagPool" style="font-size: 18px;">--</div>
+            <div class="card-desc">Railway PostgreSQL connections</div>
+          </div>
+        </div>
+
+        <!-- Query EXPLAIN tool -->
+        <div class="card" style="margin-bottom: 24px;">
+          <h3 style="font-size: 15px; margin-bottom: 8px;">Query Performance Analyzer (EXPLAIN)</h3>
+          <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">Run EXPLAIN (ANALYZE, BUFFERS) safely on read-only queries to verify indexes.</p>
+          <div style="display:flex; gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="explainSqlInput" class="form-input" placeholder="SELECT * FROM product WHERE is_active = true LIMIT 10" style="font-family: var(--font-mono); font-size: 13px;">
+            <button class="btn primary" onclick="handleRunExplain()">Run Explain</button>
+          </div>
+          <pre id="explainResultOutput" style="max-height: 250px;">-- EXPLAIN output will appear here --</pre>
+        </div>
+
+        <div class="card">
+          <h3 style="font-size: 15px; margin-bottom: 8px;">Raw Diagnostic Payload</h3>
+          <pre id="diagRawJson" style="max-height: 300px;">Loading...</pre>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODAL: CREATE API KEY -->
+  <div id="createKeyModal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 style="font-size: 16px;">Create New API Key</h3>
+        <button class="btn sm" onclick="closeModal('createKeyModal')">✕</button>
+      </div>
+      <form onsubmit="handleCreateKey(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Client / App Name</label>
+            <input type="text" id="newKeyName" class="form-input" placeholder="e.g. Mobile iOS Client or Solar Partner XYZ" required>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+              <label class="form-label">Rate Limit (RPM)</label>
+              <input type="number" id="newKeyRpm" class="form-input" value="120" min="10" max="1000">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Custom API Key (Optional)</label>
+              <input type="text" id="newCustomKey" class="form-input" placeholder="Leave blank to auto-generate">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Table Access Permissions</label>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+              Select the tables this key is authorized to access and choose allowed actions.
+            </p>
+            <div id="tableRulesContainer" style="max-height: 300px; overflow-y: auto; padding-right: 4px;">
+              Loading tables...
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" onclick="closeModal('createKeyModal')">Cancel</button>
+          <button type="submit" class="btn primary">Generate Key</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: KEY CREATED SUCCESS -->
+  <div id="keyCreatedSuccessModal" class="modal-overlay">
+    <div class="modal" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 style="font-size: 16px; color: var(--accent);">✓ API Key Created</h3>
+        <button class="btn sm" onclick="closeModal('keyCreatedSuccessModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 12px; font-size: 13px;">
+          Copy this key now. For your security, this key is encrypted and stored in PostgreSQL:
+        </p>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="createdKeySecret" class="form-input" readonly style="font-family: var(--font-mono); font-size: 12px; background: #000;">
+          <button class="btn primary sm" onclick="copyToClipboard('createdKeySecret')">Copy</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal('keyCreatedSuccessModal')">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: VIEW PERMISSIONS -->
+  <div id="viewPermModal" class="modal-overlay">
+    <div class="modal" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 id="viewPermTitle" style="font-size: 16px;">Key Permissions</h3>
+        <button class="btn sm" onclick="closeModal('viewPermModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <pre id="viewPermContent" style="max-height: 400px;"></pre>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal('viewPermModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/admin/app.js"></script>
+</body>
+</html>
