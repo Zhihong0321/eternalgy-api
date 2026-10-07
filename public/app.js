@@ -181,6 +181,7 @@ function renderKeysTable(keys) {
         </td>
         <td>
           <div style="display:flex; gap: 8px;">
+            <button class="btn sm primary" onclick="openKeyDocs('${k.id}')">📖 Docs</button>
             <button class="btn sm" onclick="viewPermissions('${k.id}')">Inspect</button>
             <button class="btn sm danger" onclick="deleteKey('${k.id}')">Revoke</button>
           </div>
@@ -336,11 +337,23 @@ async function handleCreateKey(e) {
     loadKeys();
 
     // Show created secret modal
-    document.getElementById('createdKeySecret').value = data.key.apiKey;
+    const keySecret = data.key.apiKey;
+    document.getElementById('createdKeySecret').value = keySecret;
+    const docUrl = `${window.location.origin}/admin/portal.html?key=${encodeURIComponent(keySecret)}`;
+    document.getElementById('createdDocUrl').value = docUrl;
+    document.getElementById('createdDocOpenLink').href = docUrl;
+
     openModal('keyCreatedSuccessModal');
   } catch (err) {
     alert('Failed to create key: ' + err.message);
   }
+}
+
+function openKeyDocs(id) {
+  const key = allKeys.find((k) => k.id === id);
+  if (!key) return;
+  const keyParam = key.apiKey || key.maskedApiKey;
+  window.open(`/admin/portal.html?key=${encodeURIComponent(keyParam)}`, '_blank');
 }
 
 // Audit Logs

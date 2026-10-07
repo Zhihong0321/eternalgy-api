@@ -166,4 +166,37 @@ describe('API Gateway HTTP Integration & Per-API-Key Access Control', () => {
     expect(json.count).toBeGreaterThan(0);
     expect(json.logs[0].url).toBeDefined();
   });
+
+  it('exposes tailored API documentation and schemas for a specific key', async () => {
+    // 1. Check detailed key-schema endpoint
+    const schemaRes = await app.inject({
+      method: 'GET',
+      url: '/api/docs/key-schema?key=eter_demo_catalog_key_2026',
+    });
+
+    expect(schemaRes.statusCode).toBe(200);
+    const schemaJson = schemaRes.json();
+    expect(schemaJson.clientName).toContain('Public Website');
+    expect(Array.isArray(schemaJson.tables)).toBe(true);
+
+    const productTable = schemaJson.tables.find((t: any) => t.table === 'product');
+    expect(productTable).toBeDefined();
+    expect(productTable.actions).toContain('read');
+    expect(productTable.endpoints.some((ep: any) => ep.path === '/v1/data/product')).toBe(true);
+
+    // Ensure invoice is NOT in docs for this key
+    expect(schemaJson.tables.some((t: any) => t.table === 'invoice')).toBe(false);
+
+    // 2. Check dynamic OpenAPI 3.0 spec endpoint
+    const openApiRes = await app.inject({
+      method: 'GET',
+      url: '/api/docs/key-openapi.json?key=eter_demo_catalog_key_2026',
+    });
+
+    expect(openApiRes.statusCode).toBe(200);
+    const openApiJson = openApiRes.json();
+    expect(openApiJson.openapi).toBe('3.0.3');
+    expect(openApiJson.paths['/v1/data/product']).toBeDefined();
+    expect(openApiJson.paths['/v1/data/invoice']).toBeUndefined();
+  });
 });

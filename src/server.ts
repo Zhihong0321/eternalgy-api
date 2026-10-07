@@ -13,6 +13,7 @@ import { healthRoutes } from './routes/health.js';
 import { dataRoutes } from './routes/data.js';
 import { adminRoutes } from './routes/admin.js';
 import { debugRoutes } from './routes/debug.js';
+import { keyDocsRoutes } from './routes/key-docs.js';
 import { keyService } from './security/key-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -104,6 +105,7 @@ export async function buildServer() {
   await app.register(dataRoutes);
   await app.register(adminRoutes);
   await app.register(debugRoutes);
+  await app.register(keyDocsRoutes);
 
   // Custom 404 handler
   app.setNotFoundHandler((_req, reply) => {

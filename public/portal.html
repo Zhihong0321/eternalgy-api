@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eternalgy API Gateway — Developer Documentation</title>
+  <link rel="stylesheet" href="/admin/styles.css">
+  <link rel="icon" href="data:,">
+  <style>
+    .portal-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 24px;
+      margin-top: 20px;
+    }
+    .portal-sidebar {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      height: fit-content;
+    }
+    .portal-table-link {
+      display: block;
+      padding: 8px 12px;
+      border-radius: 6px;
+      color: var(--text-main);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 4px;
+      transition: all 0.2s;
+    }
+    .portal-table-link:hover, .portal-table-link.active {
+      background: var(--bg-hover);
+      color: var(--accent);
+    }
+    .code-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .code-tab-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 4px 10px;
+      font-size: 11px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .code-tab-btn.active {
+      background: var(--accent);
+      color: #032b1d;
+      font-weight: 600;
+    }
+    .schema-pill {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+    }
+    .pill-type { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+    .pill-req { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+    .pill-opt { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <div class="brand">
+        <div class="logo-badge">ETERNALGY</div>
+        <h1>Developer API Documentation</h1>
+      </div>
+      <div class="header-status">
+        <div id="keyIdentityBadge" class="badge healthy">Loading Key...</div>
+        <div style="display:flex; gap: 8px;">
+          <input type="text" id="activeKeyInput" class="form-input" placeholder="Paste x-api-key here" style="width: 240px; padding: 6px 10px; font-size: 12px; font-family: var(--font-mono);">
+          <button class="btn sm primary" onclick="reloadPortal()">Load Docs</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div id="portalLoading" style="text-align: center; padding: 60px; color: var(--text-muted);">
+        Loading custom documentation for your API Key...
+      </div>
+
+      <div id="portalContent" style="display: none;">
+        <!-- Overview Banner -->
+        <div class="card" style="margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+              <h2 id="portalClientName" style="font-size: 18px; margin-bottom: 4px;">--</h2>
+              <p style="color: var(--text-muted); font-size: 13px;">
+                Role: <span id="portalRole" class="code">--</span> | 
+                Rate Limit: <span id="portalRpm" style="font-weight: 600;">--</span> req/min | 
+                Authorized Tables: <span id="portalTableCount" style="font-weight: 600; color: var(--accent);">--</span>
+              </p>
+            </div>
+            <div style="display:flex; gap: 8px;">
+              <a id="downloadOpenApiBtn" href="#" target="_blank" class="btn sm">Export OpenAPI 3.0</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="portal-layout">
+          <!-- Sidebar -->
+          <div class="portal-sidebar">
+            <div style="font-size: 11px; text-transform: uppercase; font-weight: 600; color: var(--text-muted); margin-bottom: 12px;">
+              Authorized Tables
+            </div>
+            <div id="sidebarTableLinks"></div>
+          </div>
+
+          <!-- Main Table Documentation Details -->
+          <div id="tableDetailsContainer">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let activeKey = new URLSearchParams(window.location.search).get('key') || localStorage.getItem('eter_active_doc_key') || '';
+    let currentSpec = null;
+    let selectedTable = '';
+
+    document.addEventListener('DOMContentLoaded', () => {
+      if (activeKey) {
+        document.getElementById('activeKeyInput').value = activeKey;
+        loadKeyDocs();
+      } else {
+        document.getElementById('portalLoading').innerHTML = `
+          <div style="max-width: 450px; margin: 0 auto; background: var(--bg-card); padding: 30px; border-radius: 8px; border: 1px solid var(--border);">
+            <h3 style="margin-bottom: 8px;">API Key Required</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+              Enter your API Key above or click "View API Docs" from the Admin Console to view your tailored API endpoints and schemas.
+            </p>
+          </div>
+        `;
+      }
+    });
+
+    function reloadPortal() {
+      const input = document.getElementById('activeKeyInput').value.trim();
+      if (!input) return;
+      activeKey = input;
+      localStorage.setItem('eter_active_doc_key', activeKey);
+      const url = new URL(window.location);
+      url.searchParams.set('key', activeKey);
+      window.history.pushState({}, '', url);
+      loadKeyDocs();
+    }
+
+    async function loadKeyDocs() {
+      document.getElementById('portalLoading').style.display = 'block';
+      document.getElementById('portalContent').style.display = 'none';
+
+      try {
+        const res = await fetch(`/api/docs/key-schema?key=${encodeURIComponent(activeKey)}`);
+        if (!res.ok) {
+          const err = await res.json();
+          document.getElementById('portalLoading').innerHTML = `<div style="color: var(--danger); font-size: 14px;">Error: ${err.message}</div>`;
+          return;
+        }
+
+        currentSpec = await res.json();
+        renderPortal(currentSpec);
+      } catch (err) {
+        document.getElementById('portalLoading').innerHTML = `<div style="color: var(--danger);">Failed to load schema: ${err.message}</div>`;
+      }
+    }
+
+    function renderPortal(spec) {
+      document.getElementById('portalLoading').style.display = 'none';
+      document.getElementById('portalContent').style.display = 'block';
+
+      document.getElementById('keyIdentityBadge').innerText = spec.clientName;
+      document.getElementById('portalClientName').innerText = spec.clientName;
+      document.getElementById('portalRole').innerText = spec.role || 'default';
+      document.getElementById('portalRpm').innerText = `${spec.rateLimitRpm}`;
+      document.getElementById('portalTableCount').innerText = `${spec.allowedTablesCount} tables`;
+
+      document.getElementById('downloadOpenApiBtn').href = `/api/docs/key-openapi.json?key=${encodeURIComponent(activeKey)}`;
+
+      // Render Sidebar
+      const sidebar = document.getElementById('sidebarTableLinks');
+      sidebar.innerHTML = spec.tables.map(t => `
+        <a href="#table_${t.table}" class="portal-table-link ${t.table === selectedTable ? 'active' : ''}" onclick="selectTable('${t.table}')">
+          ${t.table}
+          <div style="font-size: 11px; opacity: 0.6; margin-top: 2px;">${t.actions.join(', ')}</div>
+        </a>
+      `).join('');
+
+      if (!selectedTable && spec.tables.length > 0) {
+        selectedTable = spec.tables[0].table;
+      }
+
+      renderTableDetail(selectedTable);
+    }
+
+    function selectTable(tbl) {
+      selectedTable = tbl;
+      document.querySelectorAll('.portal-table-link').forEach(l => l.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+      renderTableDetail(tbl);
+    }
+
+    function renderTableDetail(tblName) {
+      const tbl = currentSpec.tables.find(t => t.table === tblName);
+      if (!tbl) return;
+
+      const container = document.getElementById('tableDetailsContainer');
+      const origin = window.location.origin;
+
+      container.innerHTML = `
+        <div class="card" style="margin-bottom: 20px;">
+          <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h2 style="font-size: 20px;">Table: <span class="code" style="color: var(--accent); font-size: 18px;">${tbl.table}</span></h2>
+            <div style="display: flex; gap: 6px;">
+              ${tbl.actions.map(a => `<span class="method ${a === 'read' ? 'get' : a === 'create' ? 'post' : a === 'update' ? 'patch' : 'delete'}">${a.toUpperCase()}</span>`).join(' ')}
+            </div>
+          </div>
+
+          <!-- Endpoints -->
+          <h3 style="font-size: 14px; margin-top: 20px; margin-bottom: 10px;">Available API Endpoints</h3>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px;">
+            ${tbl.endpoints.map(ep => `
+              <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span class="method ${ep.method.toLowerCase()}">${ep.method}</span>
+                  <span style="font-family: var(--font-mono); font-size: 13px;">${ep.path}</span>
+                </div>
+                <div style="color: var(--text-muted); font-size: 12px;">${ep.description}</div>
+              </div>
+            `).join('')}
+          </div>
+
+          <!-- Readable Columns Schema -->
+          <h3 style="font-size: 14px; margin-top: 24px; margin-bottom: 10px;">Readable Response Schema (${tbl.columns.readable.length} fields)</h3>
+          <div class="table-container" style="margin-bottom: 24px;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Field Name</th>
+                  <th>Database Type</th>
+                  <th>JSON Type</th>
+                  <th>Nullable</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tbl.columns.readable.map(c => `
+                  <tr>
+                    <td style="font-weight: 600; font-family: var(--font-mono); font-size: 13px;">${c.name}</td>
+                    <td><span class="schema-pill pill-type">${c.dataType}</span></td>
+                    <td><span class="code">${c.jsonType}</span></td>
+                    <td>${c.isNullable ? '<span class="schema-pill pill-opt">Nullable</span>' : '<span class="schema-pill pill-req">Not Null</span>'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          ${tbl.columns.writable && tbl.columns.writable.length > 0 ? `
+            <!-- Writable Payload Schema -->
+            <h3 style="font-size: 14px; margin-top: 24px; margin-bottom: 10px;">Writable Payload Schema (${tbl.columns.writable.length} fields allowed for POST / PATCH)</h3>
+            <div class="table-container" style="margin-bottom: 24px;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Field Name</th>
+                    <th>Database Type</th>
+                    <th>JSON Type</th>
+                    <th>Nullable</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${tbl.columns.writable.map(c => `
+                    <tr>
+                      <td style="font-weight: 600; font-family: var(--font-mono); font-size: 13px;">${c.name}</td>
+                      <td><span class="schema-pill pill-type">${c.dataType}</span></td>
+                      <td><span class="code">${c.jsonType}</span></td>
+                      <td>${c.isNullable ? '<span class="schema-pill pill-opt">Optional</span>' : '<span class="schema-pill pill-req">Required</span>'}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : ''}
+
+          <!-- Code Snippets -->
+          <h3 style="font-size: 14px; margin-top: 24px; margin-bottom: 10px;">Sample Requests</h3>
+          <pre style="margin-bottom: 16px;"><code># cURL Example
+curl "${origin}/v1/data/${tbl.table}?limit=10" \\
+  -H "x-api-key: ${activeKey}"</code></pre>
+
+          <pre style="margin-bottom: 16px;"><code>// JavaScript (Fetch)
+const response = await fetch("${origin}/v1/data/${tbl.table}?limit=10", {
+  headers: {
+    "x-api-key": "${activeKey}"
+  }
+});
+const data = await response.json();
+console.log(data);</code></pre>
+
+          <!-- Interactive Test Runner -->
+          <h3 style="font-size: 14px; margin-top: 24px; margin-bottom: 10px;">Interactive API Tester</h3>
+          <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 14px;">
+            <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+              <input type="text" id="testQueryParam" class="form-input" value="limit=2" placeholder="Query params (e.g. limit=5&sort=id)" style="font-family: var(--font-mono); font-size: 12px;">
+              <button class="btn primary sm" onclick="runLiveTest('${tbl.table}')">Send Request</button>
+            </div>
+            <pre id="liveTestOutput" style="max-height: 250px;">Click "Send Request" to test live query with your key.</pre>
+          </div>
+        </div>
+      `;
+    }
+
+    async function runLiveTest(tbl) {
+      const q = document.getElementById('testQueryParam').value.trim();
+      const output = document.getElementById('liveTestOutput');
+      output.innerText = 'Sending request...';
+
+      try {
+        const res = await fetch(`/v1/data/${tbl}?${q}`, {
+          headers: { 'x-api-key': activeKey }
+        });
+        const json = await res.json();
+        output.innerText = JSON.stringify(json, null, 2);
+      } catch (err) {
+        output.innerText = 'Request error: ' + err.message;
+      }
+    }
+  </script>
+</body>
+</html>
