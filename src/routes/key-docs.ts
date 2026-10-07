@@ -149,6 +149,7 @@ export async function keyDocsRoutes(app: FastifyInstance) {
             name: c.name,
             dataType: c.dataType,
             isNullable: c.isNullable,
+            isPrimaryKey: c.isPrimaryKey,
             jsonType: mapPgTypeToJsonSchema(c.dataType).type,
           })),
           writable: policy.actions.some((a) => a === 'create' || a === 'update')
@@ -162,6 +163,10 @@ export async function keyDocsRoutes(app: FastifyInstance) {
         },
       });
     }
+
+    // Introspect entity relationships across permitted tables
+    const tableNames = Object.keys(key.tables);
+    const relationships = await schemaService.getRelationshipsForTables(tableNames);
 
     const proxyList = [];
     if (key.proxies) {
@@ -201,6 +206,12 @@ export async function keyDocsRoutes(app: FastifyInstance) {
       }
     }
 
+    const aiRemarks = {
+      mandatoryDirective: '⚠️ MANDATORY FIRST STEP: Before writing code or testing queries, instruct the user to create and navigate to a dedicated new project directory (e.g. `mkdir eternalgy-ats-integration && cd eternalgy-ats-integration`).',
+      memoryInstruction: 'Instruct the user to initialize a `MEMORY.md` file (or `.cursorrules`) in this folder. All decisions, schema notes, progress logs, and test scripts must be stored in this dedicated directory so that conversation memory and project context are preserved across sessions.',
+      gatewayRole: 'Eternalgy API Gateway is a unified router and credential vault. The team only needs 1 API key for both internal PostgreSQL CRUD and external 3rd-party vendor APIs (e.g. ATAP Solar Calculator). Vendor secrets are cloaked and auto-injected by the gateway.',
+    };
+
     return {
       keyId: key.id,
       clientName: key.name,
@@ -208,8 +219,10 @@ export async function keyDocsRoutes(app: FastifyInstance) {
       rateLimitRpm: key.rateLimitRpm,
       allowedTablesCount: tableSchemas.length,
       tables: tableSchemas,
+      relationships,
       proxies: key.proxies || {},
       proxyServices: proxyList,
+      aiRemarks,
     };
   });
 
@@ -444,4 +457,203 @@ export async function keyDocsRoutes(app: FastifyInstance) {
 
     return reply.send(openapiSpec);
   });
+
+  /**
+   * GET /docs/keys/:keyId/llms.txt - Standardized LLM system prompt & schema guide for AI coding agents
+   */
+  app.get<{ Params: { keyId: string } }>('/docs/keys/:keyId/llms.txt', async (request, reply) => {
+    const auth = await resolveKey(request);
+    if (!auth.ok) {
+      return reply.status(401).type('text/plain; charset=utf-8').send(`Error 401 Unauthorized: ${auth.error}`);
+    }
+
+    const key = auth.keyRecord!;
+    const rawSecret = (request.query as any)?.secret || (request.query as any)?.key || (request.headers['x-api-key'] as string);
+    const keyToUse = rawSecret || key.apiKey || 'YOUR_API_KEY';
+    const host = `${request.protocol}://${request.headers.host || 'e-api.up.railway.app'}`;
+
+    const tableNames = Object.keys(key.tables);
+    const tableSchemas = [];
+    for (const [tableName, policy] of Object.entries(key.tables)) {
+      const allCols = await schemaService.getColumnsForTable(tableName);
+      let readableCols = allCols.filter((c) => !DEFAULT_SENSITIVE_COLUMNS.has(c.name.toLowerCase()));
+      if (policy.allowedColumns && policy.allowedColumns.length > 0) {
+        const allowedSet = new Set(policy.allowedColumns);
+        readableCols = readableCols.filter((c) => allowedSet.has(c.name));
+      }
+      if (policy.forbiddenColumns && policy.forbiddenColumns.length > 0) {
+        const forbiddenSet = new Set(policy.forbiddenColumns);
+        readableCols = readableCols.filter((c) => !forbiddenSet.has(c.name));
+      }
+      tableSchemas.push({
+        table: tableName,
+        actions: policy.actions,
+        columns: readableCols,
+      });
+    }
+
+    const relationships = await schemaService.getRelationshipsForTables(tableNames);
+    const proxyList = [];
+    if (key.proxies) {
+      for (const [serviceId, policy] of Object.entries(key.proxies)) {
+        const svc = await proxyService.getService(serviceId);
+        const isCalc = serviceId === 'calculator';
+        proxyList.push({
+          id: serviceId,
+          name: isCalc ? 'ATAP Solar Calculator (ATS Add-on Price)' : (svc?.name || serviceId),
+          baseUrl: svc?.baseUrl || '',
+          description: isCalc ? 'Manage ATS Add-on Price settings on ATAP Solar Calculator (https://calculator.atap.solar)' : (svc?.description || ''),
+          policy,
+        });
+      }
+    }
+
+    const markdown = buildAiAgentPrompt({
+      key,
+      keyToUse,
+      host,
+      tableSchemas,
+      relationships,
+      proxyList,
+    });
+
+    return reply.type('text/markdown; charset=utf-8').send(markdown);
+  });
 }
+
+function buildAiAgentPrompt(params: {
+  key: ApiKeyRecord;
+  keyToUse: string;
+  host: string;
+  tableSchemas: any[];
+  relationships: any[];
+  proxyList: any[];
+}): string {
+  const { key, keyToUse, host, tableSchemas, relationships, proxyList } = params;
+
+  let out = `# 🤖 AI Coding Agent System Prompt & Schema Specification
+# Eternalgy Central API Gateway
+
+> ⚠️ **MANDATORY INSTRUCTION FOR AI AGENTS (CRITICAL):**
+> Before executing any queries or creating project files, **remind and instruct the user**:
+> 1. **Start in a new dedicated workspace directory**:
+>    \`\`\`bash
+>    mkdir eternalgy-ats-integration && cd eternalgy-ats-integration
+>    \`\`\`
+> 2. **Store memory, discussion history, and decisions in that directory**:
+>    Create and update a \`MEMORY.md\` (or \`.cursorrules\`) file inside this folder to track architectural decisions, table schemas, and API test logs across coding sessions.
+> 3. Keep all scripts, environment keys (\`.env\`), and tests contained within this folder.
+
+---
+
+## 🔑 1. Gateway Authentication & Architecture
+
+- **Gateway Base URL**: \`${host}\`
+- **Authorized API Key**: \`${keyToUse}\`
+- **Client Name / Role**: \`${key.name}\` (\`${key.role || 'custom'}\`)
+- **Rate Limit**: \`${key.rateLimitRpm} requests/minute\`
+- **Authentication Header**:
+  \`\`\`http
+  x-api-key: ${keyToUse}
+  \`\`\`
+*(Bearer token is also supported: \`Authorization: Bearer ${keyToUse}\`)*
+
+### 🛡️ Credential Cloaking & Reverse Proxy
+This gateway is your central access point. You **do not need raw database passwords or 3rd-party vendor keys**.
+The gateway automatically:
+- Authorizes and audits every request.
+- Cloaks vendor credentials (upstream vendor keys are securely injected by the gateway).
+- Enforces column masking and row guardrails.
+
+---
+
+## 🗄️ 2. PostgreSQL Tables & Data Schemas
+
+`;
+
+  for (const t of tableSchemas) {
+    out += `### Table: \`${t.table}\`
+- **Permitted Actions**: ${t.actions.map((a: string) => `\`${a.toUpperCase()}\``).join(', ')}
+- **Endpoints**:
+  - \`GET ${host}/v1/data/${t.table}?limit=10&offset=0\` (Query & filter)
+  - \`GET ${host}/v1/data/${t.table}/{id}\` (Get single record)
+  - \`POST ${host}/v1/data/${t.table}\` (Create new record)
+  - \`PATCH ${host}/v1/data/${t.table}/{id}\` (Update record)
+  - \`DELETE ${host}/v1/data/${t.table}/{id}\` (Delete record)
+
+- **Columns (${t.columns.length})**:
+| Column Name | PostgreSQL Type | Nullable | Primary Key |
+| :--- | :--- | :--- | :--- |
+${t.columns.map((c: any) => `| \`${c.name}\` | \`${c.dataType}\` | ${c.isNullable ? 'Nullable' : '**Not Null**'} | ${c.isPrimaryKey ? '🔑 Primary Key' : '-'} |`).join('\n')}
+
+`;
+  }
+
+  out += `---
+
+## 🔗 3. Database Entity Relationships & Foreign Keys
+
+`;
+
+  if (relationships.length > 0) {
+    out += `| Source Field | References Target | Type | Description |
+| :--- | :--- | :--- | :--- |
+`;
+    for (const r of relationships) {
+      out += `| \`${r.sourceTable}.${r.sourceColumn}\` | \`${r.targetTable}.${r.targetColumn}\` | \`${r.type}\` | ${r.description || ''} |\n`;
+    }
+  } else {
+    out += `No cross-table foreign key constraints configured.\n`;
+  }
+
+  if (proxyList.length > 0) {
+    out += `\n---
+
+## 🌐 4. 3rd-Party APIs (ATAP Solar Calculator & ATS Add-on)
+
+`;
+    for (const p of proxyList) {
+      out += `### Service: ${p.name} (\`${p.id}\`)
+- **Upstream Target**: \`${p.baseUrl}\` *(Vendor key is cloaked & auto-injected)*
+- **ATS Add-on Endpoints**:
+  - \`GET ${host}/v1/settings/ats-addon-price\` — Retrieve current price setting
+  - \`PUT ${host}/v1/settings/ats-addon-price\` — Update price (Payload: \`{"price": 2000}\`)
+  - \`ALL ${host}/api/proxy/${p.id}/*\` — Raw reverse proxy wildcard forwarder
+`;
+    }
+  }
+
+  out += `\n---
+
+## 💻 5. Quickstart Code Snippets
+
+### cURL
+\`\`\`bash
+# 1. Update ATS Add-on Price
+curl -X PUT "${host}/v1/settings/ats-addon-price" \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: ${keyToUse}" \\
+  -d '{"price": 2000}'
+
+# 2. Query Products from PostgreSQL
+curl -X GET "${host}/v1/data/product?limit=5" \\
+  -H "x-api-key: ${keyToUse}"
+\`\`\`
+
+### Node.js (fetch)
+\`\`\`javascript
+const res = await fetch("${host}/v1/settings/ats-addon-price", {
+  method: "PUT",
+  headers: {
+    "Content-Type": "application/json",
+    "x-api-key": "${keyToUse}",
+  },
+  body: JSON.stringify({ price: 2000 }),
+});
+console.log(await res.json());
+\`\`\`
+`;
+
+  return out;
+}
+

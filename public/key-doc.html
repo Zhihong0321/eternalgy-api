@@ -169,10 +169,27 @@
           </div>
         </div>
 
+        <!-- AI Coding Agent Directive Banner -->
+        <div style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.35); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 20px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 280px;">
+            <div style="font-weight: 600; color: #c084fc; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+              🤖 AI Agent Directive (Cursor · Windsurf · Claude Code · Antigravity · Copilot)
+            </div>
+            <div style="font-size: 12px; color: var(--text-main); margin-top: 4px; line-height: 1.5;">
+              <strong>⚠️ Mandatory First Step:</strong> AI coding agents must advise the user to <strong>create a new project folder</strong> (e.g. <code>mkdir eternalgy-ats-integration && cd eternalgy-ats-integration</code>) so discussion history, scripts, and <code>MEMORY.md</code> can be safely stored and isolated.
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn sm" style="background: #9333ea; color: white;" onclick="copyAiPrompt()">📋 Copy Prompt for AI</button>
+            <a id="llmsTxtLink" href="#" target="_blank" class="btn sm" style="background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border);">📄 Raw llms.txt</a>
+          </div>
+        </div>
+
         <!-- Section Navigation -->
         <div class="section-tab-nav">
           <button class="sec-tab-btn active" data-sec="overviewSec">📋 Access Matrix & Keys</button>
           <button class="sec-tab-btn" data-sec="docsSec">📖 Endpoints & Schema</button>
+          <button class="sec-tab-btn" data-sec="aiAgentSec" style="color: #c084fc;">🤖 AI Agent Guide & Relations</button>
           <button class="sec-tab-btn" data-sec="testerSec">⚡ Live Tester & Code</button>
         </div>
 
@@ -279,6 +296,74 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
           </div>
         </section>
 
+        <!-- SECTION: AI AGENT GUIDE & DATABASE RELATIONS -->
+        <section id="aiAgentSec" class="sec-pane">
+          <!-- Directive Card -->
+          <div class="card" style="margin-bottom: 24px; border-left: 4px solid #a855f7;">
+            <h3 style="font-size: 16px; margin-bottom: 6px; color: #c084fc;">🤖 AI Agent Directives & Workspace Protocol</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+              Protocol for AI coding assistants (Cursor, Windsurf, Claude Code, Antigravity, GitHub Copilot).
+            </p>
+            <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 14px; font-size: 13px; line-height: 1.6;">
+              <div style="margin-bottom: 12px;">
+                <strong style="color: #c084fc;">1. Workspace Isolation Directive:</strong><br>
+                Always remind the user to start in a clean, dedicated folder before creating code:
+                <pre style="margin-top: 6px; margin-bottom: 8px;"><code>mkdir eternalgy-ats-integration && cd eternalgy-ats-integration</code></pre>
+              </div>
+              <div style="margin-bottom: 12px;">
+                <strong style="color: #c084fc;">2. Maintain Session Context & Discussion Memory:</strong><br>
+                Instruct the user to create a <code>MEMORY.md</code> (or <code>.cursorrules</code>) file inside that folder. Log all key decisions, table relations, and API endpoints so future AI sessions retain full context without cross-polluting unrelated codebases.
+              </div>
+              <div>
+                <strong style="color: #c084fc;">3. Gateway Architecture:</strong><br>
+                Use this single API key for both internal PostgreSQL CRUD and external 3rd-party vendor APIs. Vendor secrets (like <code>calculator2026</code>) are automatically injected and cloaked by the gateway.
+              </div>
+            </div>
+          </div>
+
+          <!-- Relationships Card -->
+          <div class="card" style="margin-bottom: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <div>
+                <h3 style="font-size: 16px; margin-bottom: 4px; color: #10b981;">🔗 Entity Relationships & Database Foreign Keys</h3>
+                <p style="font-size: 12px; color: var(--text-muted);">
+                  Foreign key constraints and domain entity references across permitted PostgreSQL tables (<code>prod_main</code>).
+                </p>
+              </div>
+              <span id="relationCountBadge" class="badge healthy">--</span>
+            </div>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Source Table & Field</th>
+                    <th>Target Reference</th>
+                    <th>Relation Type</th>
+                    <th>Domain Meaning / Context</th>
+                  </tr>
+                </thead>
+                <tbody id="relationshipsTableBody">
+                  <tr><td colspan="4" style="text-align:center; padding: 20px; color: var(--text-muted);">Loading relationships...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Ready-to-copy AI System Prompt -->
+          <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <div>
+                <h3 style="font-size: 16px; margin-bottom: 4px;">📋 Pre-Formatted AI Agent System Prompt</h3>
+                <p style="font-size: 12px; color: var(--text-muted);">
+                  Ready to copy into <code>.cursorrules</code>, custom instructions, or AI prompt chat.
+                </p>
+              </div>
+              <button class="btn primary sm" onclick="copyAiPrompt()">Copy Full Prompt</button>
+            </div>
+            <pre id="aiSystemPromptBox" style="max-height: 380px; white-space: pre-wrap; font-size: 12px; font-family: var(--font-mono);"><code>Generating prompt...</code></pre>
+          </div>
+        </section>
+
         <!-- SECTION 3: CODE SAMPLES & TESTER -->
         <section id="testerSec" class="sec-pane">
           <div class="card" style="margin-bottom: 24px;">
@@ -369,6 +454,10 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
 
       document.getElementById('openApiDownloadBtn').href = `/api/docs/key-openapi.json?keyId=${encodeURIComponent(data.keyId)}`;
 
+      const llmsUrl = `/docs/keys/${encodeURIComponent(data.keyId)}/llms.txt${rawSecret ? `?secret=${encodeURIComponent(rawSecret)}` : ''}`;
+      const llmsBtn = document.getElementById('llmsTxtLink');
+      if (llmsBtn) llmsBtn.href = llmsUrl;
+
       // 1. Render Proxy Services Matrix
       const proxyMatrixBody = document.getElementById('proxyMatrixBody');
       const proxyCard = document.getElementById('proxyServicesCard');
@@ -453,6 +542,39 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
         selectHtml += `<option value="${t.table}">Table: ${t.table}</option>`;
       });
       select.innerHTML = selectHtml;
+
+      // 5. Render Entity Relationships
+      const relsBody = document.getElementById('relationshipsTableBody');
+      const relBadge = document.getElementById('relationCountBadge');
+      const relationships = data.relationships || [];
+      if (relBadge) relBadge.innerText = `${relationships.length} Relations`;
+      if (relsBody) {
+        if (relationships.length === 0) {
+          relsBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 16px; color: var(--text-muted)">No cross-table foreign key constraints defined for these tables.</td></tr>`;
+        } else {
+          relsBody.innerHTML = relationships.map(r => `
+            <tr>
+              <td style="font-weight: 600; font-family: var(--font-mono); font-size: 13px; color: #10b981;">
+                ${escapeHtml(r.sourceTable)}.<span style="color: #38bdf8;">${escapeHtml(r.sourceColumn)}</span>
+              </td>
+              <td style="font-family: var(--font-mono); font-size: 13px;">
+                👉 <b>${escapeHtml(r.targetTable)}</b>.${escapeHtml(r.targetColumn)}
+              </td>
+              <td>
+                <span class="badge ${r.type === 'foreign_key' ? 'healthy' : 'degraded'}">
+                  ${r.type === 'foreign_key' ? 'Foreign Key (DB)' : 'Logical Reference'}
+                </span>
+              </td>
+              <td style="font-size: 12px; color: var(--text-muted);">
+                ${escapeHtml(r.description || 'Reference relation')}
+              </td>
+            </tr>
+          `).join('');
+        }
+      }
+
+      // 6. Generate and render AI System Prompt
+      generateAndRenderAiPrompt(data);
 
       // Select first resource
       if (proxyServices.length > 0) {
@@ -733,6 +855,81 @@ print(res.json())`;
     function escapeHtml(str) {
       if (!str) return '';
       return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    let cachedAiPrompt = '';
+
+    function generateAndRenderAiPrompt(data) {
+      const origin = window.location.origin;
+      const keyStr = rawSecret || 'YOUR_API_KEY';
+
+      let prompt = `You are an AI Coding Agent integrating with the Eternalgy Central API Gateway.
+
+================================================================================
+⚠️ MANDATORY FIRST STEP - WORKSPACE ISOLATION & MEMORY PROTOCOL:
+Before writing code, generating scripts, or executing API requests, you MUST:
+1. Advise the user to create and navigate into a dedicated new project directory:
+   mkdir eternalgy-ats-integration && cd eternalgy-ats-integration
+2. Create and maintain a MEMORY.md file (or .cursorrules) inside that directory.
+3. Record all architectural decisions, discussion history, table schemas, and endpoint test results in MEMORY.md so that future AI sessions preserve complete memory without polluting other projects.
+================================================================================
+
+1. AUTHENTICATION & ARCHITECTURE:
+- Gateway Base URL: ${origin}
+- API Key: ${keyStr}
+- Header: x-api-key: ${keyStr}
+- Dual Access / Credential Cloaking:
+  This single key accesses BOTH internal PostgreSQL tables and external 3rd-party vendor APIs.
+  Upstream vendor secret credentials (e.g. calculator2026) are safely cloaked and injected by the gateway.
+
+2. DATABASE TABLES & SCHEMAS:
+`;
+
+      (data.tables || []).forEach(t => {
+        prompt += `\nTable: "${t.table}" (Permitted Actions: ${t.actions.join(', ')})\n`;
+        prompt += `Endpoints:\n  - GET  ${origin}/v1/data/${t.table}?limit=10&offset=0\n  - POST ${origin}/v1/data/${t.table}\n  - PATCH ${origin}/v1/data/${t.table}/{id}\n  - DELETE ${origin}/v1/data/${t.table}/{id}\n`;
+        prompt += `Columns (${t.columns.readable.length}):\n`;
+        t.columns.readable.forEach(c => {
+          prompt += `  - ${c.name} : ${c.dataType}${c.isPrimaryKey ? ' [PRIMARY KEY]' : ''}${c.isNullable ? ' [nullable]' : ' [required]'}\n`;
+        });
+      });
+
+      if ((data.relationships || []).length > 0) {
+        prompt += `\n3. DATABASE ENTITY RELATIONSHIPS & FOREIGN KEYS:\n`;
+        data.relationships.forEach(r => {
+          prompt += `- ${r.sourceTable}.${r.sourceColumn} -> ${r.targetTable}.${r.targetColumn} (${r.type}: ${r.description || ''})\n`;
+        });
+      }
+
+      if ((data.proxyServices || []).length > 0) {
+        prompt += `\n4. 3RD-PARTY VENDOR PROXY SERVICES (CREDENTIALS CLOAKED):\n`;
+        data.proxyServices.forEach(p => {
+          prompt += `Service: ${p.name} (Target: ${p.baseUrl})\n`;
+          (p.endpoints || []).forEach(ep => {
+            prompt += `  - ${ep.method} ${origin}${ep.path} : ${ep.description}\n`;
+          });
+        });
+      }
+
+      prompt += `\n5. CODE EXAMPLE (UPDATE ATS PRICE VIA GATEWAY):
+curl -X PUT "${origin}/v1/settings/ats-addon-price" \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: ${keyStr}" \\
+  -d '{"price": 2000}'
+`;
+
+      cachedAiPrompt = prompt;
+      const box = document.getElementById('aiSystemPromptBox');
+      if (box) box.innerText = prompt;
+    }
+
+    function copyAiPrompt() {
+      if (!cachedAiPrompt) {
+        alert('Prompt is preparing, please wait a moment...');
+        return;
+      }
+      navigator.clipboard.writeText(cachedAiPrompt);
+      alert('AI Agent System Prompt copied! Paste it directly into Cursor, Windsurf, Claude Code, or your AI assistant chat.');
     }
   </script>
 </body>
