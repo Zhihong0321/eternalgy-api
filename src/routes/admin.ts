@@ -1,65 +1,128 @@
 import { FastifyInstance } from 'fastify';
 import { requireAdmin } from '../security/auth-middleware.js';
-import { policyStore } from '../security/policies.js';
+import { keyService } from '../security/key-service.js';
 import { executeQuery } from '../db/pool.js';
 import { getRecentAuditLogs } from '../middleware/audit-logger.js';
-import { ClientPolicy } from '../security/types.js';
+import { TablePolicy } from '../security/types.js';
+
+interface CreateKeyBody {
+  name: string;
+  apiKey?: string;
+  role?: string;
+  rateLimitRpm?: number;
+  tables: Record<string, TablePolicy>;
+  expiresAt?: string | null;
+}
+
+interface UpdateKeyBody {
+  name?: string;
+  isActive?: boolean;
+  rateLimitRpm?: number;
+  tables?: Record<string, TablePolicy>;
+  expiresAt?: string | null;
+}
 
 export async function adminRoutes(app: FastifyInstance) {
   // Enforce Admin Secret on all admin routes
   app.addHook('preHandler', requireAdmin);
 
   /**
-   * GET /api/admin/keys - List all configured API keys and their permission models
+   * GET /api/admin/keys - List all configured API keys and their per-key access rules
    */
   app.get('/api/admin/keys', async () => {
-    const policies = policyStore.getAllPolicies().map((p) => ({
-      keyId: p.keyId,
-      clientName: p.clientName,
-      role: p.role,
-      rateLimitRpm: p.rateLimitRpm,
-      maskedApiKey: p.apiKey.slice(0, 8) + '...' + p.apiKey.slice(-4),
-      tables: Object.keys(p.tables),
+    const keys = await keyService.listKeys();
+    const list = keys.map((k) => ({
+      id: k.id,
+      name: k.name,
+      maskedApiKey: k.apiKey.slice(0, 10) + '...' + k.apiKey.slice(-4),
+      isActive: k.isActive,
+      role: k.role,
+      rateLimitRpm: k.rateLimitRpm,
+      allowedTables: Object.keys(k.tables),
+      tables: k.tables,
+      expiresAt: k.expiresAt,
+      createdAt: k.createdAt,
+      lastUsedAt: k.lastUsedAt,
     }));
 
-    return { keys: policies };
+    return { total: list.length, keys: list };
   });
 
   /**
-   * POST /api/admin/keys - Register or update an API key with granular table policies
+   * POST /api/admin/keys - Issue a new API key with custom per-key table access control
    */
-  app.post<{ Body: ClientPolicy }>('/api/admin/keys', async (request, reply) => {
-    const policy = request.body;
+  app.post<{ Body: CreateKeyBody }>('/api/admin/keys', async (request, reply) => {
+    const { name, apiKey, role, rateLimitRpm, tables, expiresAt } = request.body;
 
-    if (!policy.apiKey || !policy.keyId || !policy.role || !policy.tables) {
+    if (!name || !tables || typeof tables !== 'object') {
       return reply.status(400).send({
         statusCode: 400,
         error: 'Bad Request',
-        message: 'Missing required fields: keyId, apiKey, role, tables.',
+        message: 'Missing required fields: name, tables (object mapping table names to permissions).',
       });
     }
 
-    policyStore.registerPolicy(policy);
+    const created = await keyService.createKey({
+      name,
+      apiKey,
+      role,
+      rateLimitRpm,
+      tables,
+      expiresAt,
+    });
+
     return reply.status(201).send({
-      message: 'API Key registered successfully',
-      keyId: policy.keyId,
-      clientName: policy.clientName,
+      message: 'API Key generated successfully with custom access control.',
+      key: {
+        id: created.id,
+        name: created.name,
+        apiKey: created.apiKey, // Returned once upon creation
+        isActive: created.isActive,
+        role: created.role,
+        rateLimitRpm: created.rateLimitRpm,
+        tables: created.tables,
+        expiresAt: created.expiresAt,
+      },
     });
   });
 
   /**
-   * DELETE /api/admin/keys/:apiKey - Revoke an API key
+   * PATCH /api/admin/keys/:id - Update key permissions, toggle active status, or change limits
    */
-  app.delete<{ Params: { apiKey: string } }>('/api/admin/keys/:apiKey', async (request, reply) => {
-    const { apiKey } = request.params;
-    const revoked = policyStore.revokeKey(apiKey);
-    if (!revoked) {
-      return reply.status(404).send({
-        statusCode: 404,
-        message: 'API Key not found',
+  app.patch<{ Params: { id: string }; Body: UpdateKeyBody }>(
+    '/api/admin/keys/:id',
+    async (request, reply) => {
+      const { id } = request.params;
+      const updates = request.body;
+
+      const updated = await keyService.updateKey(id, updates);
+      if (!updated) {
+        return reply.status(404).send({
+          statusCode: 404,
+          message: `API Key with ID '${id}' not found.`,
+        });
+      }
+
+      return reply.send({
+        message: 'API Key access controls updated successfully.',
+        key: updated,
       });
     }
-    return reply.send({ message: 'API Key revoked successfully' });
+  );
+
+  /**
+   * DELETE /api/admin/keys/:id - Permanently revoke/delete an API key
+   */
+  app.delete<{ Params: { id: string } }>('/api/admin/keys/:id', async (request, reply) => {
+    const { id } = request.params;
+    const deleted = await keyService.deleteKey(id);
+    if (!deleted) {
+      return reply.status(404).send({
+        statusCode: 404,
+        message: `API Key with ID '${id}' not found.`,
+      });
+    }
+    return reply.send({ message: `API Key '${id}' permanently deleted.` });
   });
 
   /**

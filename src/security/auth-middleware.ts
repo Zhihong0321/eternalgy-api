@@ -1,13 +1,14 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { config } from '../config/env.js';
-import { policyStore } from './policies.js';
-import { AuthContext, ClientPolicy } from './types.js';
+import { keyService } from './key-service.js';
+import { AuthContext, ApiKeyRecord, TablePolicy } from './types.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
-    clientPolicy?: ClientPolicy;
+    apiKeyRecord?: ApiKeyRecord;
     authContext?: AuthContext;
     isAdmin?: boolean;
+    clientTables?: Record<string, TablePolicy>;
   }
 }
 
@@ -42,25 +43,26 @@ export async function authenticateApiKey(
     return;
   }
 
-  // 2. Lookup standard Client Policy
-  const policy = policyStore.getPolicyByApiKey(keyToTest);
-  if (!policy) {
+  // 2. Lookup Per-API-Key record & verify active status / expiration
+  const keyResult = await keyService.getValidKey(keyToTest);
+  if (!keyResult.valid || !keyResult.record) {
     return reply.status(401).send({
       statusCode: 401,
       error: 'Unauthorized',
-      message: 'Invalid API key or key has been revoked.',
+      message: keyResult.reason || 'Invalid or revoked API key.',
     });
   }
 
-  // Optional contextual headers (e.g. mobile app passing authenticated customer ID)
+  const record = keyResult.record;
   const userId = request.headers['x-user-id'] as string | undefined;
   const tenantId = request.headers['x-tenant-id'] as string | undefined;
 
-  request.clientPolicy = policy;
+  request.apiKeyRecord = record;
+  request.clientTables = record.tables;
   request.authContext = {
-    keyId: policy.keyId,
-    clientName: policy.clientName,
-    role: policy.role,
+    keyId: record.id,
+    clientName: record.name,
+    role: record.role,
     userId,
     tenantId,
   };

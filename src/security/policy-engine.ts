@@ -21,7 +21,7 @@ export class PolicyEngine {
    * Verify if the client has permission to perform an action on a table
    */
   static authorize(
-    clientPolicy: ClientPolicy,
+    keyRecord: { tables: Record<string, TablePolicy>; role?: string },
     tableName: string,
     action: Action,
     authContext: AuthContext
@@ -34,12 +34,12 @@ export class PolicyEngine {
       };
     }
 
-    // 2. Check if table is configured in client policy
-    const tablePolicy = clientPolicy.tables[tableName];
+    // 2. Check if table is configured in this API key's permissions
+    const tablePolicy = keyRecord.tables[tableName];
     if (!tablePolicy) {
       return {
         allowed: false,
-        reason: `Table '${tableName}' is not accessible for role '${clientPolicy.role}'.`,
+        reason: `Table '${tableName}' is not authorized for this API key (${authContext.clientName || authContext.keyId}).`,
       };
     }
 

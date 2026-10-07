@@ -4,10 +4,12 @@ import { ClientPolicy } from '../src/security/types.js';
 
 describe('PolicyEngine Access Control', () => {
   const testPolicy: ClientPolicy = {
-    keyId: 'test_key_01',
+    id: 'test_key_01',
+    name: 'Testing Client',
     apiKey: 'test_token_secret',
-    clientName: 'Testing Client',
+    isActive: true,
     role: 'tester',
+    rateLimitRpm: 120,
     tables: {
       product: {
         actions: ['read'],
@@ -40,7 +42,7 @@ describe('PolicyEngine Access Control', () => {
       { keyId: 'test_key_01', clientName: 'Test', role: 'tester' }
     );
     expect(auth.allowed).toBe(false);
-    expect(auth.reason).toContain('not accessible for role');
+    expect(auth.reason).toContain('not authorized for this API key');
   });
 
   it('blocks unpermitted action (e.g. DELETE on read-only table)', () => {

@@ -3,7 +3,7 @@ import { FastifyInstance } from 'fastify';
 import { buildServer } from '../src/server.js';
 import { config } from '../src/config/env.js';
 
-describe('API Gateway HTTP Integration', () => {
+describe('API Gateway HTTP Integration & Per-API-Key Access Control', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
@@ -38,18 +38,18 @@ describe('API Gateway HTTP Integration', () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it('blocks access to undeclared tables for a client role with 403', async () => {
+  it('blocks access to undeclared tables for a client API key with 403', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/v1/data/invoice',
       headers: {
-        'x-api-key': 'eter_demo_catalog_key_2026', // catalog_viewer role
+        'x-api-key': 'eter_demo_catalog_key_2026', // catalog_viewer key (only product, package, etc.)
       },
     });
 
     expect(res.statusCode).toBe(403);
     const json = res.json();
-    expect(json.message).toContain('not accessible for role');
+    expect(json.message).toContain('not authorized for this API key');
   });
 
   it('blocks access to globally restricted tables (e.g. otps) with 403', async () => {
@@ -88,6 +88,68 @@ describe('API Gateway HTTP Integration', () => {
     const json = res.json();
     expect(json.keys).toBeDefined();
     expect(Array.isArray(json.keys)).toBe(true);
+  });
+
+  it('dynamically issues a new per-API-key and enforces its custom table access', async () => {
+    // 1. Issue a brand new key for a specific partner
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/admin/keys',
+      headers: {
+        'x-admin-secret': config.ADMIN_API_KEY,
+      },
+      payload: {
+        name: 'Partner ABC Integration',
+        role: 'partner_abc',
+        tables: {
+          product: {
+            actions: ['read'],
+            allowedColumns: ['id', 'name'],
+          },
+        },
+      },
+    });
+
+    expect(createRes.statusCode).toBe(201);
+    const createJson = createRes.json();
+    const newKey = createJson.key.apiKey;
+    const keyId = createJson.key.id;
+    expect(newKey).toBeDefined();
+
+    // 2. New key tries to access forbidden table (invoice) -> 403
+    const invoiceRes = await app.inject({
+      method: 'GET',
+      url: '/v1/data/invoice',
+      headers: {
+        'x-api-key': newKey,
+      },
+    });
+    expect(invoiceRes.statusCode).toBe(403);
+    expect(invoiceRes.json().message).toContain('not authorized for this API key');
+
+    // 3. Admin deactivates this key (isActive: false)
+    const patchRes = await app.inject({
+      method: 'PATCH',
+      url: `/api/admin/keys/${keyId}`,
+      headers: {
+        'x-admin-secret': config.ADMIN_API_KEY,
+      },
+      payload: {
+        isActive: false,
+      },
+    });
+    expect(patchRes.statusCode).toBe(200);
+
+    // 4. Request with deactivated key immediately fails with 401
+    const disabledRes = await app.inject({
+      method: 'GET',
+      url: '/v1/data/product',
+      headers: {
+        'x-api-key': newKey,
+      },
+    });
+    expect(disabledRes.statusCode).toBe(401);
+    expect(disabledRes.json().message).toContain('deactivated by administrator');
   });
 
   it('checks audit logs after requests', async () => {

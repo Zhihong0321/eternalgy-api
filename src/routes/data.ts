@@ -61,7 +61,7 @@ export async function dataRoutes(app: FastifyInstance) {
 
       // Governed client check
       const auth = PolicyEngine.authorize(
-        request.clientPolicy!,
+        request.apiKeyRecord!,
         table,
         'read',
         request.authContext!
@@ -126,7 +126,7 @@ export async function dataRoutes(app: FastifyInstance) {
       }
 
       const auth = PolicyEngine.authorize(
-        request.clientPolicy!,
+        request.apiKeyRecord!,
         table,
         'read',
         request.authContext!
@@ -177,7 +177,7 @@ export async function dataRoutes(app: FastifyInstance) {
       }
 
       const auth = PolicyEngine.authorize(
-        request.clientPolicy!,
+        request.apiKeyRecord!,
         table,
         'create',
         request.authContext!
@@ -236,7 +236,7 @@ export async function dataRoutes(app: FastifyInstance) {
       }
 
       const auth = PolicyEngine.authorize(
-        request.clientPolicy!,
+        request.apiKeyRecord!,
         table,
         'update',
         request.authContext!
@@ -301,7 +301,7 @@ export async function dataRoutes(app: FastifyInstance) {
       }
 
       const auth = PolicyEngine.authorize(
-        request.clientPolicy!,
+        request.apiKeyRecord!,
         table,
         'delete',
         request.authContext!

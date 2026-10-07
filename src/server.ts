@@ -8,8 +8,12 @@ import { registerAuditLogging } from './middleware/audit-logger.js';
 import { healthRoutes } from './routes/health.js';
 import { dataRoutes } from './routes/data.js';
 import { adminRoutes } from './routes/admin.js';
+import { keyService } from './security/key-service.js';
 
 export async function buildServer() {
+  // Initialize Per-API-Key store & cache
+  await keyService.initialize();
+
   const app = Fastify({
     logger: {
       level: config.NODE_ENV === 'production' ? 'info' : 'debug',

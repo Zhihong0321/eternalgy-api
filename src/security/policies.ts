@@ -110,27 +110,30 @@ class PolicyStore {
   private seedDefaultKeys() {
     // Demo / Default keys
     this.registerPolicy({
-      keyId: 'key_viewer_demo',
+      id: 'key_viewer_demo',
+      name: 'Public Website / Calculator',
       apiKey: 'eter_demo_catalog_key_2026',
-      clientName: 'Public Website / Calculator',
+      isActive: true,
       role: 'catalog_viewer',
       rateLimitRpm: 60,
       tables: ROLE_TEMPLATES.catalog_viewer,
     });
 
     this.registerPolicy({
-      keyId: 'key_mobile_demo',
+      id: 'key_mobile_demo',
+      name: 'Mobile Customer App',
       apiKey: 'eter_demo_mobile_key_2026',
-      clientName: 'Mobile Customer App',
+      isActive: true,
       role: 'customer_portal',
       rateLimitRpm: 120,
       tables: ROLE_TEMPLATES.customer_portal,
     });
 
     this.registerPolicy({
-      keyId: 'key_partner_demo',
+      id: 'key_partner_demo',
+      name: 'Referral Partner App',
       apiKey: 'eter_demo_partner_key_2026',
-      clientName: 'Referral Partner App',
+      isActive: true,
       role: 'referral_partner',
       rateLimitRpm: 120,
       tables: ROLE_TEMPLATES.referral_partner,
