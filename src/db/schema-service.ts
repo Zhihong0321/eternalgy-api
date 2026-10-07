@@ -173,7 +173,80 @@ class SchemaService {
       this.lastFetched = Date.now();
     } catch (err: any) {
       console.warn('[SchemaService] Schema refresh error:', err.message);
+      this.seedInMemoryFallback();
     }
+  }
+
+  private seedInMemoryFallback(): void {
+    if (this.cache.size > 0) return;
+
+    const packageCols: ColumnMetadata[] = [
+      { name: 'id', dataType: 'integer', isNullable: false, defaultValue: null, isPrimaryKey: true },
+      { name: 'bubble_id', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'package_name', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'panel', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'inverter_1', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'price', dataType: 'numeric', isNullable: true, defaultValue: null },
+      { name: 'nett_price', dataType: 'numeric', isNullable: true, defaultValue: null },
+      { name: 'panel_qty', dataType: 'integer', isNullable: true, defaultValue: null },
+      { name: 'linked_package_item', dataType: 'ARRAY', isNullable: true, defaultValue: null },
+      { name: 'active', dataType: 'boolean', isNullable: true, defaultValue: null },
+      { name: 'created_at', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
+      { name: 'updated_at', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
+    ];
+
+    const productCols: ColumnMetadata[] = [
+      { name: 'id', dataType: 'integer', isNullable: false, defaultValue: null, isPrimaryKey: true },
+      { name: 'bubble_id', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'name', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'cost_price', dataType: 'numeric', isNullable: true, defaultValue: null },
+      { name: 'selling_price', dataType: 'numeric', isNullable: true, defaultValue: null },
+      { name: 'inventory', dataType: 'boolean', isNullable: true, defaultValue: null },
+      { name: 'linked_brand', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'linked_category', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'active', dataType: 'boolean', isNullable: true, defaultValue: null },
+      { name: 'created_at', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
+      { name: 'updated_at', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
+    ];
+
+    this.cache.set('package', packageCols);
+    this.cache.set('product', productCols);
+
+    this.relationshipsCache = [
+      {
+        sourceTable: 'package',
+        sourceColumn: 'panel',
+        targetTable: 'product',
+        targetColumn: 'bubble_id',
+        type: 'logical_relation',
+        description: 'Specific solar panel product model included in the solar package',
+      },
+      {
+        sourceTable: 'package',
+        sourceColumn: 'inverter_1',
+        targetTable: 'product',
+        targetColumn: 'bubble_id',
+        type: 'logical_relation',
+        description: 'Primary inverter product model configured for this solar package',
+      },
+      {
+        sourceTable: 'product',
+        sourceColumn: 'linked_brand',
+        targetTable: 'brand',
+        targetColumn: 'bubble_id',
+        type: 'logical_relation',
+        description: 'Manufacturer brand identity associated with this solar product',
+      },
+      {
+        sourceTable: 'product',
+        sourceColumn: 'linked_category',
+        targetTable: 'category',
+        targetColumn: 'bubble_id',
+        type: 'logical_relation',
+        description: 'Product categorization (e.g. Solar Panel, Inverter, Battery, Accessory)',
+      },
+    ];
+    this.lastFetched = Date.now();
   }
 
   async getColumnsForTable(tableName: string): Promise<ColumnMetadata[]> {
