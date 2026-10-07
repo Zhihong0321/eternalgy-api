@@ -4,9 +4,9 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-COPY package.json pnpm-lock.yaml tsconfig.json ./
+COPY package.json pnpm-lock.yaml tsconfig.json pnpm-workspace.yaml* .npmrc* ./
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm config set strict-dep-builds false && pnpm install --frozen-lockfile
 
 COPY src ./src
 
@@ -20,9 +20,9 @@ ENV NODE_ENV=production
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml* .npmrc* ./
 
-RUN pnpm install --prod --frozen-lockfile
+RUN pnpm config set strict-dep-builds false && pnpm install --prod --frozen-lockfile
 
 COPY --from=builder /app/dist ./dist
 COPY public ./public
