@@ -187,16 +187,21 @@ describe('API Gateway HTTP Integration & Per-API-Key Access Control', () => {
     // Ensure invoice is NOT in docs for this key
     expect(schemaJson.tables.some((t: any) => t.table === 'invoice')).toBe(false);
 
-    // 2. Check dynamic OpenAPI 3.0 spec endpoint
-    const openApiRes = await app.inject({
+    // 3. Check dedicated HTML page for keyId
+    const htmlRes = await app.inject({
       method: 'GET',
-      url: '/api/docs/key-openapi.json?key=eter_demo_catalog_key_2026',
+      url: '/docs/keys/key_viewer_demo',
     });
+    expect(htmlRes.statusCode).toBe(200);
+    expect(htmlRes.headers['content-type']).toContain('text/html');
+    expect(htmlRes.body).toContain('API Key Access Profile & Documentation');
 
-    expect(openApiRes.statusCode).toBe(200);
-    const openApiJson = openApiRes.json();
-    expect(openApiJson.openapi).toBe('3.0.3');
-    expect(openApiJson.paths['/v1/data/product']).toBeDefined();
-    expect(openApiJson.paths['/v1/data/invoice']).toBeUndefined();
+    // 4. Check schema lookup via keyId
+    const keyIdSchemaRes = await app.inject({
+      method: 'GET',
+      url: '/api/docs/key-schema?keyId=key_viewer_demo',
+    });
+    expect(keyIdSchemaRes.statusCode).toBe(200);
+    expect(keyIdSchemaRes.json().keyId).toBe('key_viewer_demo');
   });
 });

@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Key Access Profile & Documentation — Eternalgy</title>
+  <link rel="stylesheet" href="/admin/styles.css">
+  <link rel="icon" href="data:,">
+  <style>
+    .key-hero {
+      background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .key-title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .profile-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .meta-box {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 14px;
+    }
+    .meta-box-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .meta-box-val {
+      font-size: 14px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+    }
+    .layout-grid {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 850px) {
+      .layout-grid { grid-template-columns: 1fr; }
+    }
+    .sidebar-menu {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      height: fit-content;
+    }
+    .menu-item {
+      display: block;
+      padding: 10px 14px;
+      border-radius: 6px;
+      color: var(--text-main);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 4px;
+      transition: all 0.2s;
+    }
+    .menu-item:hover, .menu-item.active {
+      background: var(--bg-hover);
+      color: var(--accent);
+    }
+    .schema-tag {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+    }
+    .schema-tag.type { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+    .schema-tag.req { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+    .schema-tag.opt { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+    .section-tab-nav {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+    }
+    .sec-tab-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 14px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .sec-tab-btn:hover { color: var(--text-main); }
+    .sec-tab-btn.active { background: var(--bg-hover); color: var(--accent); }
+    .sec-pane { display: none; }
+    .sec-pane.active { display: block; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <div class="brand">
+        <div class="logo-badge">ETERNALGY</div>
+        <h1>API Key Access Profile & Documentation</h1>
+      </div>
+      <div class="header-status">
+        <button class="btn sm" onclick="copyShareLink()">📋 Copy Doc Link</button>
+        <a id="openApiDownloadBtn" href="#" target="_blank" class="btn sm">Export OpenAPI 3.0</a>
+        <a href="/admin/" class="btn sm primary">Admin Console</a>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div id="loadingState" style="text-align: center; padding: 60px; color: var(--text-muted);">
+        Loading API Key Access Profile and Schema...
+      </div>
+
+      <div id="loadedContent" style="display: none;">
+        <!-- Hero Header -->
+        <div class="key-hero">
+          <div class="key-title-row">
+            <div>
+              <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--accent); margin-bottom: 4px;">
+                Dedicated API Key Profile
+              </div>
+              <h1 id="heroKeyName" style="font-size: 24px; font-weight: 700; margin-bottom: 6px;">--</h1>
+              <p style="color: var(--text-muted); font-size: 13px;">
+                This page documents the live connection credentials, access permissions, and table schemas specifically granted to this API key.
+              </p>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span id="heroStatusBadge" class="badge healthy">Active</span>
+            </div>
+          </div>
+
+          <div class="profile-meta-grid">
+            <div class="meta-box">
+              <div class="meta-box-label">Key ID</div>
+              <div class="meta-box-val" id="metaKeyId">--</div>
+            </div>
+            <div class="meta-box">
+              <div class="meta-box-label">Role</div>
+              <div class="meta-box-val" id="metaRole">--</div>
+            </div>
+            <div class="meta-box">
+              <div class="meta-box-label">Rate Limit Quota</div>
+              <div class="meta-box-val"><span id="metaRpm">--</span> <span style="font-size: 11px; color: var(--text-muted);">req/min</span></div>
+            </div>
+            <div class="meta-box">
+              <div class="meta-box-label">Authorized Tables</div>
+              <div class="meta-box-val" style="color: var(--accent);" id="metaTableCount">--</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section Navigation Tabs -->
+        <div class="section-tab-nav">
+          <button class="sec-tab-btn active" data-sec="profileSec">🔌 Connection & Access Profile</button>
+          <button class="sec-tab-btn" data-sec="docsSec">📚 Endpoints & Table Schemas</button>
+          <button class="sec-tab-btn" data-sec="testerSec">💻 Code Samples & Live Tester</button>
+        </div>
+
+        <!-- SECTION 1: CONNECTION & ACCESS PROFILE -->
+        <section id="profileSec" class="sec-pane active">
+          <div class="grid-cards">
+            <!-- Connection Card -->
+            <div class="card" style="grid-column: span 2;">
+              <h3 style="font-size: 16px; margin-bottom: 12px;">Connection Instructions</h3>
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div>
+                  <div class="meta-box-label">Base Gateway URL</div>
+                  <pre><code id="connBaseUrl">https://e-api.up.railway.app</code></pre>
+                </div>
+                <div>
+                  <div class="meta-box-label">HTTP Authentication Headers</div>
+                  <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">Pass your API Key in either header:</p>
+                  <pre><code>x-api-key: YOUR_API_KEY
+# OR
+Authorization: Bearer YOUR_API_KEY</code></pre>
+                </div>
+                <div>
+                  <div class="meta-box-label">Standard HTTP Status Codes</div>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; font-size: 12px; margin-top: 6px;">
+                    <div><span class="status-code s2xx">200 OK</span>: Successful query</div>
+                    <div><span class="status-code s2xx">201 Created</span>: Record inserted</div>
+                    <div><span class="status-code s4xx">401 Unauthorized</span>: Missing or invalid key</div>
+                    <div><span class="status-code s4xx">403 Forbidden</span>: Table/action not granted</div>
+                    <div><span class="status-code s4xx">429 Rate Limit</span>: Exceeded quota</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Guardrails Card -->
+            <div class="card">
+              <h3 style="font-size: 16px; margin-bottom: 12px;">Enforced Guardrails</h3>
+              <ul style="color: var(--text-muted); font-size: 13px; list-style-position: inside; display: flex; flex-direction: column; gap: 8px;">
+                <li><b>Hard Limit Capping</b>: Queries are capped at max 100 rows per request.</li>
+                <li><b>Statement Timeout</b>: 5,000ms max execution time to protect database CPU.</li>
+                <li><b>Column Masking</b>: Unapproved fields are stripped server-side.</li>
+                <li><b>Sensitive Scrubbing</b>: Passwords, tokens, and hashes are permanently blocked.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Access Profile Matrix Table -->
+          <div class="card">
+            <h3 style="font-size: 16px; margin-bottom: 6px;">Granted Access Control Matrix</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+              Below is the comprehensive list of tables, operations, and columns explicitly authorized for this key.
+            </p>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Table Name</th>
+                    <th>Permitted Actions</th>
+                    <th>Column Filtering</th>
+                    <th>Row-Level Security Scope</th>
+                  </tr>
+                </thead>
+                <tbody id="matrixTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 2: ENDPOINTS & SCHEMAS -->
+        <section id="docsSec" class="sec-pane">
+          <div class="layout-grid">
+            <div class="sidebar-menu">
+              <div style="font-size: 11px; text-transform: uppercase; font-weight: 600; color: var(--text-muted); margin-bottom: 12px;">
+                Authorized Tables
+              </div>
+              <div id="tableNavLinks"></div>
+            </div>
+
+            <div id="activeTableDocDetail">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 3: CODE SAMPLES & TESTER -->
+        <section id="testerSec" class="sec-pane">
+          <div class="card" style="margin-bottom: 24px;">
+            <h3 style="font-size: 16px; margin-bottom: 12px;">Ready-to-Use Code Samples</h3>
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+              <button class="code-tab-btn active" onclick="switchCodeSnippet('curl')">cURL</button>
+              <button class="code-tab-btn" onclick="switchCodeSnippet('js')">JavaScript (Node / Browser)</button>
+              <button class="code-tab-btn" onclick="switchCodeSnippet('python')">Python</button>
+            </div>
+            <pre id="activeSnippetCode" style="max-height: 300px;"><code>Loading snippet...</code></pre>
+          </div>
+
+          <div class="card">
+            <h3 style="font-size: 16px; margin-bottom: 12px;">Interactive Query Runner</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+              Execute a live query through the gateway using this key's credentials.
+            </p>
+            <div style="display: grid; grid-template-columns: 140px 1fr auto; gap: 8px; margin-bottom: 12px;">
+              <select id="testTableSelect" class="form-select" style="font-size: 13px;"></select>
+              <input type="text" id="testQueryInput" class="form-input" value="limit=2" placeholder="Query params (e.g. limit=5&sort=id)" style="font-family: var(--font-mono); font-size: 13px;">
+              <button class="btn primary" onclick="executeLiveTest()">Send Request</button>
+            </div>
+            <pre id="testResponseBox" style="max-height: 350px;">Click "Send Request" to test your query.</pre>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let keyId = window.location.pathname.split('/').pop() || new URLSearchParams(window.location.search).get('keyId') || 'key_viewer_demo';
+    let rawSecret = new URLSearchParams(window.location.search).get('secret') || '';
+    let spec = null;
+    let selectedTable = '';
+    let currentCodeLang = 'curl';
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initSectionTabs();
+      loadKeyProfile();
+    });
+
+    function initSectionTabs() {
+      const tabs = document.querySelectorAll('.sec-tab-btn');
+      tabs.forEach(t => {
+        t.addEventListener('click', () => {
+          tabs.forEach(btn => btn.classList.remove('active'));
+          document.querySelectorAll('.sec-pane').forEach(p => p.classList.remove('active'));
+
+          t.classList.add('active');
+          const target = t.getAttribute('data-sec');
+          document.getElementById(target).classList.add('active');
+        });
+      });
+    }
+
+    async function loadKeyProfile() {
+      try {
+        const url = `/api/docs/key-schema?keyId=${encodeURIComponent(keyId)}${rawSecret ? `&key=${encodeURIComponent(rawSecret)}` : ''}`;
+        const res = await fetch(url);
+        if (!res.ok) {
+          const err = await res.json();
+          document.getElementById('loadingState').innerHTML = `
+            <div style="color: var(--danger); font-size: 16px; font-weight: 600;">Error Loading Key Profile</div>
+            <div style="color: var(--text-muted); font-size: 13px; margin-top: 6px;">${err.message || 'Key not found'}</div>
+          `;
+          return;
+        }
+
+        spec = await res.json();
+        renderLoadedProfile(spec);
+      } catch (err) {
+        document.getElementById('loadingState').innerHTML = `<div style="color: var(--danger);">Failed: ${err.message}</div>`;
+      }
+    }
+
+    function renderLoadedProfile(data) {
+      document.getElementById('loadingState').style.display = 'none';
+      document.getElementById('loadedContent').style.display = 'block';
+
+      document.getElementById('heroKeyName').innerText = data.clientName;
+      document.getElementById('metaKeyId').innerText = data.keyId;
+      document.getElementById('metaRole').innerText = data.role || 'default';
+      document.getElementById('metaRpm').innerText = data.rateLimitRpm;
+      document.getElementById('metaTableCount').innerText = `${data.allowedTablesCount} tables`;
+      document.getElementById('connBaseUrl').innerText = window.location.origin;
+
+      document.getElementById('openApiDownloadBtn').href = `/api/docs/key-openapi.json?keyId=${encodeURIComponent(data.keyId)}`;
+
+      // Render Matrix Table
+      const matrixBody = document.getElementById('matrixTableBody');
+      matrixBody.innerHTML = data.tables.map(t => {
+        const readableCount = t.columns.readable.length;
+        const writableCount = t.columns.writable.length;
+        const acts = t.actions.map(a => `<span class="method ${a === 'read' ? 'get' : a === 'create' ? 'post' : a === 'update' ? 'patch' : 'delete'}">${a.toUpperCase()}</span>`).join(' ');
+
+        return `
+          <tr>
+            <td style="font-weight: 600; font-family: var(--font-mono); font-size: 13px;">${t.table}</td>
+            <td>${acts}</td>
+            <td>
+              <span class="code">${readableCount} readable columns</span>
+              ${writableCount > 0 ? `<br><span class="code" style="color: var(--accent); margin-top: 4px; display:inline-block;">${writableCount} writable columns</span>` : ''}
+            </td>
+            <td>${t.rowScope ? `<span class="code">${t.rowScope.column} = user_id</span>` : '<span style="color: var(--text-muted);">None (Full Table Scope)</span>'}</td>
+          </tr>
+        `;
+      }).join('');
+
+      // Render Sidebar
+      const sidebar = document.getElementById('tableNavLinks');
+      sidebar.innerHTML = data.tables.map(t => `
+        <a href="javascript:void(0)" class="menu-item ${t.table === selectedTable ? 'active' : ''}" onclick="selectDocTable('${t.table}')">
+          ${t.table}
+          <div style="font-size: 11px; opacity: 0.6; margin-top: 2px;">${t.actions.join(', ')}</div>
+        </a>
+      `).join('');
+
+      // Populate test runner select
+      const select = document.getElementById('testTableSelect');
+      select.innerHTML = data.tables.map(t => `<option value="${t.table}">${t.table}</option>`).join('');
+
+      if (!selectedTable && data.tables.length > 0) {
+        selectedTable = data.tables[0].table;
+      }
+
+      selectDocTable(selectedTable);
+      renderActiveCodeSnippet();
+    }
+
+    function selectDocTable(tbl) {
+      selectedTable = tbl;
+      document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+      const activeLink = Array.from(document.querySelectorAll('.menu-item')).find(l => l.innerText.includes(tbl));
+      if (activeLink) activeLink.classList.add('active');
+
+      const target = spec.tables.find(t => t.table === tbl);
+      if (!target) return;
+
+      const container = document.getElementById('activeTableDocDetail');
+      container.innerHTML = `
+        <div class="card" style="margin-bottom: 20px;">
+          <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h2 style="font-size: 20px;">Table: <span class="code" style="color: var(--accent);">${target.table}</span></h2>
+            <div style="display: flex; gap: 6px;">
+              ${target.actions.map(a => `<span class="method ${a === 'read' ? 'get' : a === 'create' ? 'post' : a === 'update' ? 'patch' : 'delete'}">${a.toUpperCase()}</span>`).join(' ')}
+            </div>
+          </div>
+
+          <h3 style="font-size: 14px; margin-top: 16px; margin-bottom: 8px;">Available Endpoints</h3>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
+            ${target.endpoints.map(ep => `
+              <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span class="method ${ep.method.toLowerCase()}">${ep.method}</span>
+                  <span style="font-family: var(--font-mono); font-size: 13px;">${ep.path}</span>
+                </div>
+                <div style="color: var(--text-muted); font-size: 12px;">${ep.description}</div>
+              </div>
+            `).join('')}
+          </div>
+
+          <h3 style="font-size: 14px; margin-top: 20px; margin-bottom: 8px;">Response Columns Schema (${target.columns.readable.length} fields)</h3>
+          <div class="table-container" style="margin-bottom: 20px;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>DB Type</th>
+                  <th>JSON Type</th>
+                  <th>Nullable</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${target.columns.readable.map(c => `
+                  <tr>
+                    <td style="font-weight: 600; font-family: var(--font-mono);">${c.name}</td>
+                    <td><span class="schema-tag type">${c.dataType}</span></td>
+                    <td><span class="code">${c.jsonType}</span></td>
+                    <td>${c.isNullable ? '<span class="schema-tag opt">Nullable</span>' : '<span class="schema-tag req">Not Null</span>'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          ${target.columns.writable.length > 0 ? `
+            <h3 style="font-size: 14px; margin-top: 20px; margin-bottom: 8px;">Writable Payload Fields (${target.columns.writable.length} fields)</h3>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Field</th>
+                    <th>DB Type</th>
+                    <th>JSON Type</th>
+                    <th>Required</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${target.columns.writable.map(c => `
+                    <tr>
+                      <td style="font-weight: 600; font-family: var(--font-mono);">${c.name}</td>
+                      <td><span class="schema-tag type">${c.dataType}</span></td>
+                      <td><span class="code">${c.jsonType}</span></td>
+                      <td>${c.isNullable ? '<span class="schema-tag opt">Optional</span>' : '<span class="schema-tag req">Required</span>'}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    function switchCodeSnippet(lang) {
+      currentCodeLang = lang;
+      document.querySelectorAll('.code-tab-btn').forEach(b => b.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+      renderActiveCodeSnippet();
+    }
+
+    function renderActiveCodeSnippet() {
+      if (!spec || !spec.tables || spec.tables.length === 0) return;
+      const tbl = selectedTable || spec.tables[0].table;
+      const origin = window.location.origin;
+      const keyStr = rawSecret || 'YOUR_API_KEY';
+      let code = '';
+
+      if (currentCodeLang === 'curl') {
+        code = `# 1. List records with pagination and sorting
+curl "${origin}/v1/data/${tbl}?limit=20&offset=0&sort=id&order=asc" \\
+  -H "x-api-key: ${keyStr}"
+
+# 2. Retrieve single record by ID
+curl "${origin}/v1/data/${tbl}/1" \\
+  -H "x-api-key: ${keyStr}"`;
+      } else if (currentCodeLang === 'js') {
+        code = `// JavaScript (Node.js / Browser Fetch)
+async function fetch${tbl}() {
+  const response = await fetch("${origin}/v1/data/${tbl}?limit=20", {
+    headers: {
+      "x-api-key": "${keyStr}"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(\`Request failed with status \${response.status}\`);
+  }
+
+  const { data, count } = await response.json();
+  console.log(\`Retrieved \${count} records:\`, data);
+}
+
+fetch${tbl}();`;
+      } else if (currentCodeLang === 'python') {
+        code = `# Python (requests)
+import requests
+
+url = "${origin}/v1/data/${tbl}"
+headers = {
+    "x-api-key": "${keyStr}"
+}
+params = {
+    "limit": 20,
+    "offset": 0
+}
+
+response = requests.get(url, headers=headers, params=params)
+if response.status_code == 200:
+    payload = response.json()
+    print(f"Retrieved {payload.get('count')} records:")
+    print(payload.get('data'))
+else:
+    print(f"Error {response.status_code}: {response.text}")`;
+      }
+
+      document.getElementById('activeSnippetCode').innerHTML = `<code>${escapeHtml(code)}</code>`;
+    }
+
+    async function executeLiveTest() {
+      const tbl = document.getElementById('testTableSelect').value;
+      const q = document.getElementById('testQueryInput').value.trim();
+      const output = document.getElementById('testResponseBox');
+      output.innerText = 'Executing query...';
+
+      const keyToUse = rawSecret || prompt('Please enter your x-api-key to run test query:');
+      if (!keyToUse) {
+        output.innerText = 'Test aborted: No API Key provided.';
+        return;
+      }
+
+      try {
+        const res = await fetch(`/v1/data/${tbl}?${q}`, {
+          headers: { 'x-api-key': keyToUse }
+        });
+        const json = await res.json();
+        output.innerText = JSON.stringify(json, null, 2);
+      } catch (err) {
+        output.innerText = 'Error: ' + err.message;
+      }
+    }
+
+    function copyShareLink() {
+      navigator.clipboard.writeText(window.location.href);
+      alert('Dedicated Key Doc Link copied to clipboard!');
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>

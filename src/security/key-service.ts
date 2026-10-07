@@ -191,6 +191,37 @@ class KeyService {
   }
 
   /**
+   * Look up an API key by its keyId (e.g. key_viewer_demo)
+   */
+  async getKeyById(id: string): Promise<ApiKeyRecord | null> {
+    for (const rec of this.cache.values()) {
+      if (rec.id === id) return rec;
+    }
+    if (this.dbInitialized) {
+      const res = await executeQuery('SELECT * FROM _gateway_api_keys WHERE id = $1', [id]);
+      if (res.rows.length > 0) {
+        const row = res.rows[0];
+        const record: ApiKeyRecord = {
+          id: row.id,
+          name: row.name,
+          apiKey: row.api_key,
+          isActive: row.is_active,
+          role: row.role,
+          rateLimitRpm: row.rate_limit_rpm,
+          tables: row.permissions?.tables || {},
+          expiresAt: row.expires_at ? new Date(row.expires_at).toISOString() : null,
+          createdAt: row.created_at ? new Date(row.created_at).toISOString() : undefined,
+          updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
+          lastUsedAt: row.last_used_at ? new Date(row.last_used_at).toISOString() : null,
+        };
+        this.cache.set(record.apiKey, record);
+        return record;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Create a new API key with custom per-key table access control
    */
   async createKey(params: {

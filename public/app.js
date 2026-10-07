@@ -180,8 +180,9 @@ function renderKeysTable(keys) {
           ${k.lastUsedAt ? formatTime(k.lastUsedAt) : 'Never'}
         </td>
         <td>
-          <div style="display:flex; gap: 8px;">
-            <button class="btn sm primary" onclick="openKeyDocs('${k.id}')">📖 Docs</button>
+          <div style="display:flex; gap: 6px; flex-wrap: wrap;">
+            <a href="/docs/keys/${k.id}" target="_blank" class="btn sm primary">📄 Dedicated Doc</a>
+            <button class="btn sm" onclick="copyKeyDocLink('${k.id}')">Copy Link</button>
             <button class="btn sm" onclick="viewPermissions('${k.id}')">Inspect</button>
             <button class="btn sm danger" onclick="deleteKey('${k.id}')">Revoke</button>
           </div>
@@ -339,7 +340,7 @@ async function handleCreateKey(e) {
     // Show created secret modal
     const keySecret = data.key.apiKey;
     document.getElementById('createdKeySecret').value = keySecret;
-    const docUrl = `${window.location.origin}/admin/portal.html?key=${encodeURIComponent(keySecret)}`;
+    const docUrl = `${window.location.origin}/docs/keys/${data.key.id}?secret=${encodeURIComponent(keySecret)}`;
     document.getElementById('createdDocUrl').value = docUrl;
     document.getElementById('createdDocOpenLink').href = docUrl;
 
@@ -349,11 +350,14 @@ async function handleCreateKey(e) {
   }
 }
 
+function copyKeyDocLink(id) {
+  const url = `${window.location.origin}/docs/keys/${id}`;
+  navigator.clipboard.writeText(url);
+  alert(`Dedicated Key Documentation Link copied:\n${url}`);
+}
+
 function openKeyDocs(id) {
-  const key = allKeys.find((k) => k.id === id);
-  if (!key) return;
-  const keyParam = key.apiKey || key.maskedApiKey;
-  window.open(`/admin/portal.html?key=${encodeURIComponent(keyParam)}`, '_blank');
+  window.open(`/docs/keys/${id}`, '_blank');
 }
 
 // Audit Logs

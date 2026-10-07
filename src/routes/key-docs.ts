@@ -1,8 +1,16 @@
 import { FastifyInstance } from 'fastify';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { keyService } from '../security/key-service.js';
 import { schemaService, ColumnMetadata } from '../db/schema-service.js';
 import { DEFAULT_SENSITIVE_COLUMNS } from '../security/policies.js';
-import { TablePolicy } from '../security/types.js';
+import { ApiKeyRecord } from '../security/types.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const keyDocHtmlPath = path.join(__dirname, '../../public/key-doc.html');
 
 function mapPgTypeToJsonSchema(pgType: string): { type: string; format?: string } {
   const t = pgType.toLowerCase();
@@ -17,25 +25,45 @@ function mapPgTypeToJsonSchema(pgType: string): { type: string; format?: string 
 
 export async function keyDocsRoutes(app: FastifyInstance) {
   /**
-   * Helper to resolve the API key from query, header, or Bearer token
+   * Helper to resolve the API key by either secret or keyId
    */
-  async function resolveKey(req: any) {
+  async function resolveKey(req: any): Promise<{ ok: boolean; keyRecord?: ApiKeyRecord; error?: string }> {
+    const keyId = (req.params?.keyId as string) || (req.query?.keyId as string);
+    if (keyId) {
+      const rec = await keyService.getKeyById(keyId);
+      if (rec) return { ok: true, keyRecord: rec };
+    }
+
     const rawKey =
       (req.query?.key as string) ||
       (req.headers['x-api-key'] as string) ||
       (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7).trim() : undefined);
 
-    if (!rawKey) {
-      return { ok: false, error: 'Missing API key. Provide via ?key=..., x-api-key, or Bearer token.' };
+    if (rawKey) {
+      const keyResult = await keyService.getValidKey(rawKey);
+      if (keyResult.valid && keyResult.record) {
+        return { ok: true, keyRecord: keyResult.record };
+      }
     }
 
-    const keyResult = await keyService.getValidKey(rawKey);
-    if (!keyResult.valid || !keyResult.record) {
-      return { ok: false, error: keyResult.reason || 'Invalid API key.' };
+    if (!keyId && !rawKey) {
+      return { ok: false, error: 'Missing API key. Provide via ?keyId=..., ?key=..., x-api-key, or Bearer token.' };
     }
 
-    return { ok: true, keyRecord: keyResult.record };
+    return { ok: false, error: 'Invalid or unknown API key.' };
   }
+
+  /**
+   * GET /docs/keys/:keyId - Dedicated HTML Documentation Page for a specific API Key
+   */
+  app.get<{ Params: { keyId: string } }>('/docs/keys/:keyId', async (_request, reply) => {
+    try {
+      const html = await fs.readFile(keyDocHtmlPath, 'utf8');
+      return reply.type('text/html; charset=utf-8').send(html);
+    } catch (err: any) {
+      return reply.status(500).send({ statusCode: 500, message: 'Documentation template missing.' });
+    }
+  });
 
   /**
    * GET /api/docs/key-schema - Detailed JSON schema of permitted tables and fields for a specific key
