@@ -31,11 +31,8 @@ class KeyService {
 
       this.dbInitialized = true;
 
-      // Check if we need to seed initial default keys
-      const countRes = await executeQuery('SELECT COUNT(*) as count FROM _gateway_api_keys');
-      if (Number(countRes.rows[0]?.count) === 0) {
-        await this.seedDefaults();
-      }
+      // Seed default/system keys (uses ON CONFLICT DO NOTHING to ensure new system keys are always present)
+      await this.seedDefaults();
 
       await this.refreshCache();
     } catch (err: any) {
@@ -80,6 +77,28 @@ class KeyService {
         createdAt: new Date().toISOString(),
       },
       {
+        id: 'key_weihao',
+        name: 'Weihao - Product & Package Manager',
+        apiKey: 'weihao2026',
+        isActive: true,
+        role: 'product_manager',
+        rateLimitRpm: 120,
+        tables: ROLE_TEMPLATES.product_manager,
+        proxies: ROLE_PROXY_TEMPLATES.product_manager,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: 'key_weihao_hyphen',
+        name: 'Weihao - Product & Package Manager (Hyphen Alias)',
+        apiKey: '-weihao2026',
+        isActive: true,
+        role: 'product_manager',
+        rateLimitRpm: 120,
+        tables: ROLE_TEMPLATES.product_manager,
+        proxies: ROLE_PROXY_TEMPLATES.product_manager,
+        createdAt: new Date().toISOString(),
+      },
+      {
         id: 'key_prod_mgr_demo',
         name: 'Product & Package Manager (with ATAP Solar ATS Addon)',
         apiKey: 'eter_demo_product_manager_key_2026',
@@ -116,6 +135,24 @@ class KeyService {
         rateLimitRpm: 120,
         tables: ROLE_TEMPLATES.customer_portal,
         proxies: ROLE_PROXY_TEMPLATES.customer_portal,
+      },
+      {
+        id: 'key_weihao',
+        name: 'Weihao - Product & Package Manager',
+        apiKey: 'weihao2026',
+        role: 'product_manager',
+        rateLimitRpm: 120,
+        tables: ROLE_TEMPLATES.product_manager,
+        proxies: ROLE_PROXY_TEMPLATES.product_manager,
+      },
+      {
+        id: 'key_weihao_hyphen',
+        name: 'Weihao - Product & Package Manager (Hyphen Alias)',
+        apiKey: '-weihao2026',
+        role: 'product_manager',
+        rateLimitRpm: 120,
+        tables: ROLE_TEMPLATES.product_manager,
+        proxies: ROLE_PROXY_TEMPLATES.product_manager,
       },
       {
         id: 'key_prod_mgr_demo',

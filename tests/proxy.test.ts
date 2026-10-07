@@ -196,4 +196,20 @@ describe('3rd-Party API Gateway Proxy & Credential Injection', () => {
     });
     expect(pkgRes.statusCode).not.toBe(403);
   });
+
+  it('authenticates with weihao2026 and -weihao2026 for Product/Package and Calculator Proxy', async () => {
+    for (const key of ['weihao2026', '-weihao2026']) {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/proxy/calculator/api/v1/settings/ats-addon-price',
+        headers: {
+          'x-api-key': key,
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const json = res.json();
+      expect(json.success).toBe(true);
+    }
+  });
 });
