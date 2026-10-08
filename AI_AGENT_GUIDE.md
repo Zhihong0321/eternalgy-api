@@ -188,3 +188,86 @@ curl -X PUT https://<your-eternalgy-host>/api/proxy/calculator/api/v1/settings/a
 5. Forwards request to `https://calculator.atap.solar/api/v1/settings/ats-addon-price`.
 6. Streams response back to client and records call in audit log.
 
+---
+
+## 📊 6. Paid Customer Marketing / Audience Export API
+
+For marketing campaigns, Meta/Facebook Custom Audiences, and CRM imports requiring paid customer contacts:
+
+### Endpoints:
+
+#### A. Get Summary & CSV Download Link
+```http
+GET /api/export/paid-customers
+Header: x-admin-secret: <ADMIN_API_KEY> (or x-api-key: <CLIENT_API_KEY>)
+```
+**Response:**
+```json
+{
+  "success": true,
+  "summary": "total customer with payment found : 1531",
+  "total_customers_with_payment": 1531,
+  "link": "https://<host>/api/export/paid-customers/download?secret=...",
+  "download_url": "https://<host>/api/export/paid-customers/download?secret=...",
+  "file_name": "paid_customers_master.csv",
+  "file_size_kb": 66.82,
+  "last_updated": "2026-10-08T05:35:20.100Z"
+}
+```
+
+#### B. Download CSV File Directly
+```http
+GET /api/export/paid-customers/download
+# or GET /api/export/paid-customers.csv
+# or GET /api/export/paid-customers?format=csv
+Header: x-admin-secret: <ADMIN_API_KEY> (or in query: ?key=<API_KEY> or ?secret=<ADMIN_KEY>)
+```
+Downloads RFC 4180 CSV file with `phone,fn,ln,email,country`.
+
+#### C. Check Master Copy Status
+```http
+GET /api/export/paid-customers/status
+Header: x-admin-secret: <ADMIN_API_KEY>
+```
+
+#### D. Manually Refresh Master Copy (No Auto-Refresh)
+```http
+POST /api/export/paid-customers/refresh?mode=full
+Header: x-admin-secret: <ADMIN_API_KEY>
+```
+- `mode=full` *(default)*: Re-queries all paid customers and rewrites the master copy.
+- `mode=incremental`: Queries newly paid customers since the last update and merges them without duplicates into the master copy.
+Returns the updated summary and download link.
+
+### Query Parameters for `GET /api/export/paid-customers`:
+- `format`: `csv` (default, RFC 4180 file download) or `json`.
+- `source`: `master` (default, serves stored copy) or `live` (queries DB in real time).
+- `deduplicate`: `true` (default, 1 row per unique customer) or `false` (1 row per paid invoice).
+- `requirePhone`: `true` or `false` (default, filters rows missing phone).
+- `requireEmail`: `true` or `false` (default, filters rows missing email).
+- `minPaidAmount`: number (default: `0`).
+- `since`: ISO timestamp (e.g. `2026-10-08T00:00:00Z` or `2026-10-08`) for **incremental / delta runs**.
+- `sinceDays`: integer relative days (e.g. `sinceDays=7` to sync invoices from the past week).
+- `dateType`: `'updated'` (default), `'payment'`, or `'created'`.
+- `limit`: optional integer cap.
+
+### Response Headers:
+- `X-Master-Copy`: `true` when served from the stored master file.
+- `X-Export-Timestamp`: ISO timestamp of the export/master file.
+- `X-Export-Count`: number of records in the export.
+
+### Output Format:
+```csv
+phone,fn,ln,email,country
+60167654321,Mei Ling,Lim,meiling@gmail.com,MY
+```
+
+**Features:**
+- Stored **Master Copy** on gateway (`storage/exports/paid_customers_master.csv`) for instant download.
+- Manual refresh on-demand (`POST /api/export/paid-customers/refresh`) with full and incremental merge modes.
+- Filters `invoice.paid_amount > 0`.
+- Traces and resolves email via `customer` and `seda_registration` records (>93% email resolution rate).
+- Normalizes Malaysian phone numbers into standard `60...` format.
+- Splits Malaysian names into `fn` and `ln` (Chinese surname first, English name prefixes, Malay `bin/binti`, Indian `a/l / a/p`, corporate entities).
+- Auto-populates `country = MY`.
+

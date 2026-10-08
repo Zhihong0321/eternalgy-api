@@ -16,7 +16,13 @@ export async function authenticateApiKey(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
-  const adminSecret = request.headers['x-admin-secret'] as string | undefined;
+  const query = request.query as Record<string, string> | undefined;
+  const adminSecret =
+    (request.headers['x-admin-secret'] as string | undefined) ||
+    query?.['x-admin-secret'] ||
+    query?.secret ||
+    query?.adminSecret;
+
   if (adminSecret && adminSecret === config.ADMIN_API_KEY) {
     request.isAdmin = true;
     request.authContext = {
@@ -27,7 +33,11 @@ export async function authenticateApiKey(
     return;
   }
 
-  const headerKey = request.headers['x-api-key'] as string | undefined;
+  const headerKey =
+    (request.headers['x-api-key'] as string | undefined) ||
+    query?.['x-api-key'] ||
+    query?.key ||
+    query?.apiKey;
   const authHeader = request.headers.authorization;
   
   let keyToTest: string | undefined = headerKey;
