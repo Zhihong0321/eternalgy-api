@@ -98,4 +98,69 @@ describe('Unified AI & Human API Key Documentation (/docs/keys/:keyId)', () => {
     expect(res.statusCode).toBe(401);
     expect(res.body).toContain('Authentication Required');
   });
+
+  describe('Key eternalgy2026 - Document Revelation', () => {
+    it('reveals HTML document when calling /docs/keys/eternalgy2026', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/docs/keys/eternalgy2026',
+        headers: {
+          accept: 'text/html',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('You are my video maker');
+      expect(res.body).toContain('sk-cp-Mn15gRFLBQz1Rb5roxtNLoet9MDnGLTiET3I2YmebEWr4WOvgQLOei3D48o2HIrm36pcF8aA1shygKt1WMWrNy-ca5Cr1cij4MxOOTHZkRBmfPLKBpXBMuo');
+    });
+
+    it('reveals Markdown document when calling /docs/keys/eternalgy2026/llms.txt', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/docs/keys/eternalgy2026/llms.txt',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toContain('text/markdown');
+      expect(res.body).toContain('You are my video maker');
+      expect(res.body).toContain('sk-cp-Mn15gRFLBQz1Rb5roxtNLoet9MDnGLTiET3I2YmebEWr4WOvgQLOei3D48o2HIrm36pcF8aA1shygKt1WMWrNy-ca5Cr1cij4MxOOTHZkRBmfPLKBpXBMuo');
+    });
+
+    it('returns document JSON from /api/document with x-api-key: eternalgy2026', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/document',
+        headers: {
+          'x-api-key': 'eternalgy2026',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const json = JSON.parse(res.body);
+      expect(json.statusCode).toBe(200);
+      expect(json.apiKey).toBe('eternalgy2026');
+      expect(json.document).toContain('You are my video maker');
+      expect(json.document).toContain('sk-cp-Mn15gRFLBQz1Rb5roxtNLoet9MDnGLTiET3I2YmebEWr4WOvgQLOei3D48o2HIrm36pcF8aA1shygKt1WMWrNy-ca5Cr1cij4MxOOTHZkRBmfPLKBpXBMuo');
+    });
+
+    it('returns raw markdown from /api/document?key=eternalgy2026&format=md', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/document?key=eternalgy2026&format=md',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toContain('text/markdown');
+      expect(res.body).toContain('You are my video maker');
+    });
+
+    it('rejects /api/document without key with 401', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/document',
+      });
+
+      expect(res.statusCode).toBe(401);
+    });
+  });
 });

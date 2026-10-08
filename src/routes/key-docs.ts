@@ -6,6 +6,7 @@ import { DEFAULT_SENSITIVE_COLUMNS } from '../security/policies.js';
 import { ApiKeyRecord } from '../security/types.js';
 import { renderKeyDocHtml } from './key-docs-renderer.js';
 import { KeyDocProfile, KeyDocTable, KeyDocEndpoint, KeyDocProxyService } from './key-docs-types.js';
+import { VIDEO_TOOLS_DOCUMENT } from '../config/documents.js';
 
 function mapPgTypeToJsonSchema(pgType: string): { type: string; format?: string } {
   const t = pgType.toLowerCase();
@@ -305,14 +306,17 @@ export async function buildKeyDocProfile(
 
   const keyToUse = rawSecret || key.apiKey || 'YOUR_API_KEY';
 
-  const aiPrompt = buildAiAgentPrompt({
-    key,
-    keyToUse,
-    host,
-    tableSchemas,
-    relationships,
-    proxyList,
-  });
+  const isVideoMakerKey = key.apiKey === 'eternalgy2026' || key.id === 'key_eternalgy2026';
+  const aiPrompt = isVideoMakerKey
+    ? VIDEO_TOOLS_DOCUMENT
+    : buildAiAgentPrompt({
+        key,
+        keyToUse,
+        host,
+        tableSchemas,
+        relationships,
+        proxyList,
+      });
 
   return {
     keyId: key.id,
@@ -341,6 +345,8 @@ export async function keyDocsRoutes(app: FastifyInstance) {
     if (keyId) {
       const rec = await keyService.getKeyById(keyId);
       if (rec) return { ok: true, keyRecord: rec };
+      const valid = await keyService.getValidKey(keyId);
+      if (valid.valid && valid.record) return { ok: true, keyRecord: valid.record };
     }
 
     const rawKey =
@@ -682,4 +688,51 @@ export async function keyDocsRoutes(app: FastifyInstance) {
     const profile = await buildKeyDocProfile(auth.keyRecord!, rawSecret, host);
     return reply.type('text/markdown; charset=utf-8').send(profile.aiPrompt);
   });
+
+  /**
+   * GET /api/document (and GET /v1/document) - Reveal document for authenticated API key
+   */
+  const handleDocumentRequest = async (request: any, reply: any) => {
+    const auth = await resolveKey(request);
+    if (!auth.ok) {
+      return reply.status(401).send({
+        statusCode: 401,
+        error: 'Unauthorized',
+        message: auth.error,
+      });
+    }
+
+    const host = `${request.protocol}://${request.headers.host || 'e-api.up.railway.app'}`;
+    const rawSecret =
+      (request.query as any)?.secret ||
+      (request.query as any)?.key ||
+      (request.headers['x-api-key'] as string);
+
+    const profile = await buildKeyDocProfile(auth.keyRecord!, rawSecret, host);
+
+    const format = (request.query as any)?.format || '';
+    const accept = (request.headers.accept || '').toLowerCase();
+    const isMarkdown =
+      format === 'md' ||
+      format === 'raw' ||
+      format === 'text' ||
+      format === 'markdown' ||
+      accept.includes('text/markdown') ||
+      (!accept.includes('text/html') && accept.includes('text/plain'));
+
+    if (isMarkdown) {
+      return reply.type('text/markdown; charset=utf-8').send(profile.aiPrompt);
+    }
+
+    return reply.send({
+      statusCode: 200,
+      apiKey: auth.keyRecord?.apiKey,
+      keyId: auth.keyRecord?.id,
+      name: auth.keyRecord?.name,
+      document: profile.aiPrompt,
+    });
+  };
+
+  app.get('/api/document', handleDocumentRequest);
+  app.get('/v1/document', handleDocumentRequest);
 }

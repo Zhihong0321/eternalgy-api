@@ -131,6 +131,17 @@ class KeyService {
         proxies: ROLE_PROXY_TEMPLATES.product_manager,
         createdAt: new Date().toISOString(),
       },
+      {
+        id: 'key_eternalgy2026',
+        name: 'HTML to Video Tools & API Key Document',
+        apiKey: 'eternalgy2026',
+        isActive: true,
+        role: 'video_maker',
+        rateLimitRpm: 120,
+        tables: ROLE_TEMPLATES.product_manager,
+        proxies: ROLE_PROXY_TEMPLATES.product_manager,
+        createdAt: new Date().toISOString(),
+      },
     ];
 
     for (const key of defaultKeys) {
@@ -199,6 +210,15 @@ class KeyService {
         name: 'Product & Package Manager (with ATAP Solar ATS Addon)',
         apiKey: 'eter_demo_product_manager_key_2026',
         role: 'product_manager',
+        rateLimitRpm: 120,
+        tables: ROLE_TEMPLATES.product_manager,
+        proxies: ROLE_PROXY_TEMPLATES.product_manager,
+      },
+      {
+        id: 'key_eternalgy2026',
+        name: 'HTML to Video Tools & API Key Document',
+        apiKey: 'eternalgy2026',
+        role: 'video_maker',
         rateLimitRpm: 120,
         tables: ROLE_TEMPLATES.product_manager,
         proxies: ROLE_PROXY_TEMPLATES.product_manager,
@@ -299,10 +319,10 @@ class KeyService {
    */
   async getKeyById(id: string): Promise<ApiKeyRecord | null> {
     for (const rec of this.cache.values()) {
-      if (rec.id === id) return rec;
+      if (rec.id === id || rec.apiKey === id) return rec;
     }
     if (this.dbInitialized) {
-      const res = await executeQuery('SELECT * FROM _gateway_api_keys WHERE id = $1', [id]);
+      const res = await executeQuery('SELECT * FROM _gateway_api_keys WHERE id = $1 OR api_key = $1', [id]);
       if (res.rows.length > 0) {
         const row = res.rows[0];
         const record: ApiKeyRecord = {
