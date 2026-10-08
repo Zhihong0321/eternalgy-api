@@ -37,7 +37,9 @@ export async function authenticateApiKey(
     (request.headers['x-api-key'] as string | undefined) ||
     query?.['x-api-key'] ||
     query?.key ||
-    query?.apiKey;
+    query?.apiKey ||
+    query?.password ||
+    query?.pass;
   const authHeader = request.headers.authorization;
   
   let keyToTest: string | undefined = headerKey;

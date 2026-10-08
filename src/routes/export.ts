@@ -23,6 +23,8 @@ interface ExportQuerystring {
   key?: string;
   apiKey?: string;
   secret?: string;
+  password?: string;
+  pass?: string;
 }
 
 interface RefreshQuerystring {
@@ -30,6 +32,8 @@ interface RefreshQuerystring {
   key?: string;
   apiKey?: string;
   secret?: string;
+  password?: string;
+  pass?: string;
 }
 
 function buildDownloadUrl(request: FastifyRequest): string {
@@ -46,9 +50,20 @@ function buildDownloadUrl(request: FastifyRequest): string {
 
   const authHeader = request.headers.authorization;
   const adminSecret = request.headers['x-admin-secret'] as string | undefined;
-  const apiKey = request.headers['x-api-key'] as string | undefined;
+  const apiKey =
+    (request.headers['x-api-key'] as string | undefined) ||
+    q.key ||
+    q.apiKey ||
+    q.password ||
+    q.pass;
 
-  if (!url.searchParams.has('key') && !url.searchParams.has('secret') && !url.searchParams.has('apiKey')) {
+  if (
+    !url.searchParams.has('key') &&
+    !url.searchParams.has('secret') &&
+    !url.searchParams.has('apiKey') &&
+    !url.searchParams.has('password') &&
+    !url.searchParams.has('pass')
+  ) {
     if (adminSecret) {
       url.searchParams.set('secret', adminSecret);
     } else if (apiKey) {

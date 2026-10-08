@@ -276,5 +276,41 @@ describe('Customer Export Route Integration (/api/export/paid-customers)', () =>
 
     querySpy.mockRestore();
   });
+
+  it('allows access using Leon account with key=leon2026 and password=leon2026', async () => {
+    // 1. With query param ?key=leon2026
+    const resKey = await app.inject({
+      method: 'GET',
+      url: '/api/export/paid-customers?key=leon2026',
+    });
+    expect(resKey.statusCode).toBe(200);
+    const jsonKey = resKey.json();
+    expect(jsonKey.success).toBe(true);
+    expect(jsonKey.summary).toContain('total customer with payment found :');
+    expect(jsonKey.link).toContain('key=leon2026');
+
+    // 2. With query param ?password=leon2026
+    const resPass = await app.inject({
+      method: 'GET',
+      url: '/api/export/paid-customers?password=leon2026',
+    });
+    expect(resPass.statusCode).toBe(200);
+    const jsonPass = resPass.json();
+    expect(jsonPass.success).toBe(true);
+    expect(jsonPass.summary).toContain('total customer with payment found :');
+
+    // 3. With header x-api-key: leon2026
+    const resHeader = await app.inject({
+      method: 'GET',
+      url: '/api/export/paid-customers',
+      headers: {
+        'x-api-key': 'leon2026',
+      },
+    });
+    expect(resHeader.statusCode).toBe(200);
+    const jsonHeader = resHeader.json();
+    expect(jsonHeader.success).toBe(true);
+  });
 });
+
 

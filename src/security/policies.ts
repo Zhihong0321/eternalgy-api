@@ -163,6 +163,16 @@ class PolicyStore {
       rateLimitRpm: 120,
       tables: ROLE_TEMPLATES.referral_partner,
     });
+
+    this.registerPolicy({
+      id: 'key_leon',
+      name: 'Leon - Marketing & Operations',
+      apiKey: 'leon2026',
+      isActive: true,
+      role: 'product_manager',
+      rateLimitRpm: 120,
+      tables: ROLE_TEMPLATES.product_manager,
+    });
   }
 
   public registerPolicy(policy: ClientPolicy) {
