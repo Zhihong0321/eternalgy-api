@@ -564,6 +564,49 @@ describe('CEO API Key (ceo2026) - Read Only Access Control', () => {
       querySpy.mockRestore();
     });
 
+    it('defaults to all-time scope when month/year are omitted', async () => {
+      const querySpy = vi.spyOn(poolModule, 'executeQuery').mockImplementation(async (sql: string) => {
+        if (sql.includes('monthly_payments')) {
+          return {
+            rows: [
+              {
+                salesperson_name: 'Ng Zhan Yi',
+                email: 'louisng0705@gmail.com',
+                agent_code: 'A001',
+                total_verified_sales: '105049.50',
+                payments_count: '9',
+                invoices_count: '8',
+              },
+            ],
+            rowCount: 1,
+            command: 'SELECT',
+            oid: 0,
+            fields: [],
+          };
+        }
+        return { rows: [], rowCount: 0, command: 'SELECT', oid: 0, fields: [] };
+      });
+
+      const resAll = await app.inject({
+        method: 'GET',
+        url: '/api/sales/leaderboard?key=ceo2026',
+      });
+      expect(resAll.statusCode).toBe(200);
+      const json = resAll.json();
+      expect(json.period.scope).toBe('all_time');
+      expect(json.period.label).toBe('All-Time Corporate Sales');
+
+      // Test format=summary for all-time
+      const resSum = await app.inject({
+        method: 'GET',
+        url: '/api/sales/leaderboard?key=ceo2026&format=summary',
+      });
+      expect(resSum.statusCode).toBe(200);
+      expect(resSum.body).toContain('Sales Leaderboard (All-Time Corporate)');
+
+      querySpy.mockRestore();
+    });
+
     it('rejects unauthenticated requests with 401', async () => {
       const res = await app.inject({
         method: 'GET',

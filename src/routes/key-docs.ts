@@ -98,41 +98,30 @@ The gateway automatically:
     out += `## 📊 2. Executive Sales Analytics & Leaderboard Endpoints
 
 The gateway provides fast, pre-aggregated endpoints calculated directly from verified transactions in PostgreSQL.
+All endpoints default to **ALL-TIME corporate data across the entire history**. Optional month/year filters can be supplied if desired.
 
-### 🏆 A. Monthly Sales Leaderboard
-- **October 2026 Shortcut**: \`GET ${host}/api/sales/october?key=${keyToUse}\`
-- **Any Month / Year**: \`GET ${host}/api/sales/leaderboard?year=2026&month=10&key=${keyToUse}\`
-- **Supported Query Formats**:
+### 🏆 A. Sales Leaderboard (All-Time Default)
+- **All-Time Leaderboard**: \`GET ${host}/api/sales/leaderboard?key=${keyToUse}\` (or \`${host}/api/sales/all/leaderboard\`)
+- **Specific Month / Year (Optional)**: \`GET ${host}/api/sales/leaderboard?year=2026&month=10&key=${keyToUse}\` (or shortcut \`${host}/api/sales/october\`)
+- **Supported Formats**:
   - \`format=json\` (Default): Complete JSON ranking, total sales, invoices count, payments count.
   - \`format=csv\`: Flattened CSV file ready to download or import into Excel / Google Sheets.
   - \`format=summary\`: One-sentence text summary.
 
-### 📋 B. Sales Agent, Invoices & Payments Detailed Breakdown
-- **October 2026 Breakdown**: \`GET ${host}/api/sales/october/breakdown?key=${keyToUse}\`
-- **Any Month / Year Breakdown**: \`GET ${host}/api/sales/breakdown?year=2026&month=10&key=${keyToUse}\`
-- **Filter by Specific Agent**: \`GET ${host}/api/sales/breakdown?year=2026&month=10&agent=Ng%20Zhan%20Yi&key=${keyToUse}\`
-- **Excel / CSV Download**: \`GET ${host}/api/sales/october/breakdown?key=${keyToUse}&format=csv\`
+### 📋 B. Sales Agent, Invoices & Payments Detailed Breakdown (All-Time Default)
+- **All-Time Breakdown**: \`GET ${host}/api/sales/agents/invoices?key=${keyToUse}\` (or \`${host}/api/sales/breakdown\`)
+- **Filter by Specific Agent**: \`GET ${host}/api/sales/agents/invoices?agent=Ng%20Zhan%20Yi&key=${keyToUse}\`
+- **Excel / CSV Download**: \`GET ${host}/api/sales/breakdown?key=${keyToUse}&format=csv\`
+- **Specific Month / Year (Optional)**: \`GET ${host}/api/sales/october/breakdown?key=${keyToUse}\`
 
 ### 📈 C. Corporate Performance Metrics (Total Sales, Total Projects, Total kWp)
-- **Live Corporate Metrics**: \`GET ${host}/api/sales/metrics?key=${keyToUse}\`
-- **Monthly Metrics**: \`GET ${host}/api/sales/october/metrics?key=${keyToUse}\` or \`GET ${host}/api/sales/metrics?year=2026&month=10&key=${keyToUse}\`
+- **All-Time Corporate Metrics**: \`GET ${host}/api/sales/metrics?key=${keyToUse}\` (or \`${host}/api/sales/summary\`)
 - **Calculations & Formula**:
   - \`total_sales\`: Customer Revenue / Total Paid Amount across invoices
   - \`total_projects\`: Number of paid invoices (>0% payment or ≥59.9% installed)
   - \`total_kwp\`: **Formula = linked package solar panel rating * panel qty / 1000**
   - \`total_mwp\`: Capacity in Megawatt-peak (\`kwp / 1000\`)
-- **JSON Response**:
-  \`\`\`json
-  {
-    "total_sales": 28149508.59,
-    "total_sales_formatted": "RM 28,149,508.59",
-    "total_projects": 925,
-    "total_kwp": 10750.99,
-    "total_kwp_formatted": "10,750.99 kWp",
-    "total_mwp_formatted": "10.75 MWp",
-    "formula": "linked package solar panel rating * panel qty / 1000"
-  }
-  \`\`\`
+- **Optional Monthly Scope**: \`GET ${host}/api/sales/metrics?year=2026&month=10&key=${keyToUse}\` (or shortcut \`${host}/api/sales/october/metrics\`)
 
 ---
 `;
@@ -212,20 +201,20 @@ ${readableCols.map((c: any) => `| \`${c.name}\` | \`${c.dataType}\` | ${c.isNull
   if (isCeo) {
     out += `### cURL
 \`\`\`bash
-# 1. Fetch October Sales Leaderboard
-curl -s "${host}/api/sales/october?key=${keyToUse}"
+# 1. Fetch All-Time Corporate Performance Metrics (Total Sales, Projects, kWp)
+curl -s "${host}/api/sales/metrics?key=${keyToUse}"
 
-# 2. Fetch Agent, Invoices & Payments Detailed Breakdown
-curl -s "${host}/api/sales/october/breakdown?key=${keyToUse}"
+# 2. Fetch All-Time Sales Leaderboard
+curl -s "${host}/api/sales/leaderboard?key=${keyToUse}"
 
-# 3. Download CSV for Excel / Google Sheets
-curl -s "${host}/api/sales/october/breakdown?key=${keyToUse}&format=csv" -o october_sales.csv
+# 3. Fetch All-Time Agent, Invoices & Payments Detailed Breakdown
+curl -s "${host}/api/sales/agents/invoices?key=${keyToUse}"
 
-# 4. Query Invoices Table directly (Read Only)
+# 4. Download All-Time CSV for Excel / Google Sheets
+curl -s "${host}/api/sales/breakdown?key=${keyToUse}&format=csv" -o all_sales_breakdown.csv
+
+# 5. Query Invoices Table directly (Read Only)
 curl -s "${host}/v1/data/invoice?key=${keyToUse}&limit=5"
-
-# 5. Query Payments Table directly (Read Only)
-curl -s "${host}/v1/data/payment?key=${keyToUse}&limit=5"
 \`\`\`
 
 ### Python
@@ -235,20 +224,21 @@ import requests
 BASE_URL = "${host}"
 API_KEY = "${keyToUse}"
 
-# Fetch October sales breakdown
-res = requests.get(f"{BASE_URL}/api/sales/october/breakdown", params={"key": API_KEY})
-data = res.json()
+# Fetch All-Time Corporate Metrics
+metrics = requests.get(f"{BASE_URL}/api/sales/metrics", params={"key": API_KEY}).json()
+print(f"Total Sales: {metrics['total_sales_formatted']} | Projects: {metrics['total_projects']} | Capacity: {metrics['total_kwp_formatted']}")
 
-print(f"Total Verified Sales: RM {data['summary']['total_sales']:,.2f}")
-for agent in data['breakdown']:
-    print(f"Rank {agent['rank']}: {agent['salesperson_name']} - RM {agent['total_verified_sales']:,.2f} ({agent['invoices_count']} invoices)")
+# Fetch All-Time Sales Leaderboard
+leaderboard = requests.get(f"{BASE_URL}/api/sales/leaderboard", params={"key": API_KEY}).json()
+for agent in leaderboard['leaderboard']:
+    print(f"Rank {agent['rank']}: {agent['salesperson_name']} - RM {agent['total_verified_sales']:,.2f}")
 \`\`\`
 
 ### Node.js (fetch)
 \`\`\`javascript
-const res = await fetch("${host}/api/sales/october/breakdown?key=${keyToUse}");
+const res = await fetch("${host}/api/sales/metrics?key=${keyToUse}");
 const data = await res.json();
-console.log("October Sales Summary:", data.summary);
+console.log("Corporate Performance:", data.total_sales_formatted, data.total_projects, data.total_kwp_formatted);
 \`\`\`
 `;
   } else {

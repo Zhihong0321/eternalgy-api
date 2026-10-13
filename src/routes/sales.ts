@@ -7,6 +7,8 @@ interface SalesLeaderboardQuery {
   year?: string | number;
   format?: 'json' | 'csv' | 'summary';
   agent?: string;
+  scope?: string;
+  all?: string | boolean;
   key?: string;
   apiKey?: string;
   secret?: string;
@@ -20,6 +22,7 @@ interface CorporateMetricsQuery {
   min_paid_pct?: string | number;
   format?: 'json' | 'summary';
   scope?: string;
+  all?: string | boolean;
   key?: string;
   apiKey?: string;
   secret?: string;
@@ -32,9 +35,9 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-function parseMonth(val?: string | number): number {
+function parseMonth(val?: string | number): number | undefined {
   if (val === undefined || val === null || val === '') {
-    return new Date().getMonth() + 1; // Default to current month (1-12)
+    return undefined;
   }
   if (typeof val === 'number') {
     return Math.min(Math.max(Math.floor(val), 1), 12);
@@ -48,18 +51,18 @@ function parseMonth(val?: string | number): number {
   if (idx !== -1) {
     return idx + 1;
   }
-  return new Date().getMonth() + 1;
+  return undefined;
 }
 
-function parseYear(val?: string | number): number {
+function parseYear(val?: string | number): number | undefined {
   if (val === undefined || val === null || val === '') {
-    return new Date().getFullYear();
+    return undefined;
   }
   const num = parseInt(String(val), 10);
   if (!isNaN(num) && num >= 2000 && num <= 2100) {
     return num;
   }
-  return new Date().getFullYear();
+  return undefined;
 }
 
 function escapeCsv(val: any): string {
@@ -111,16 +114,31 @@ export interface AgentBreakdownEntry {
   invoices: AgentInvoiceItem[];
 }
 
-export async function fetchSalesLeaderboard(month: number, year: number): Promise<{
-  period: { month: number; month_name: string; year: number; start_date: string; end_date: string };
+export async function fetchSalesLeaderboard(month?: number, year?: number): Promise<{
+  period: {
+    scope: 'all_time' | 'monthly';
+    label: string;
+    month?: number | null;
+    month_name?: string | null;
+    year?: number | null;
+    start_date?: string | null;
+    end_date?: string | null;
+  };
   summary: { total_sales: number; total_payments: number; total_invoices: number; salesperson_count: number };
   leaderboard: LeaderboardEntry[];
 }> {
-  // Construct UTC timestamp window
-  const startStr = `${year}-${String(month).padStart(2, '0')}-01T00:00:00.000Z`;
-  const nextMonth = month === 12 ? 1 : month + 1;
-  const nextYear = month === 12 ? year + 1 : year;
-  const endStr = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00.000Z`;
+  let dateClause = '';
+  const params: any[] = [];
+  const isMonthly = Boolean(month && year);
+
+  if (isMonthly) {
+    const startStr = `${year}-${String(month).padStart(2, '0')}-01T00:00:00.000Z`;
+    const nextMonth = month === 12 ? 1 : month! + 1;
+    const nextYear = month === 12 ? year! + 1 : year;
+    const endStr = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00.000Z`;
+    dateClause = `AND p.payment_date >= $1 AND p.payment_date < $2`;
+    params.push(startStr, endStr);
+  }
 
   const sql = `
     WITH monthly_payments AS (
@@ -142,8 +160,8 @@ export async function fetchSalesLeaderboard(month: number, year: number): Promis
       FROM payment p
       LEFT JOIN agent a ON (p.linked_agent = a.bubble_id OR p.linked_agent = a.id::text)
       LEFT JOIN "user" u ON (p.linked_agent = u.bubble_id OR p.linked_agent = u.id::text)
-      WHERE p.payment_date >= $1 AND p.payment_date < $2
-        AND p.verified_by IS NOT NULL
+      WHERE p.verified_by IS NOT NULL
+        ${dateClause}
     )
     SELECT 
       TRIM(mp.canonical_name) as salesperson_name,
@@ -158,7 +176,7 @@ export async function fetchSalesLeaderboard(month: number, year: number): Promis
     ORDER BY total_verified_sales DESC;
   `;
 
-  const result = await executeQuery(sql, [startStr, endStr]);
+  const result = await executeQuery(sql, params);
 
   let totalSales = 0;
   let totalPayments = 0;
@@ -187,18 +205,33 @@ export async function fetchSalesLeaderboard(month: number, year: number): Promis
     });
   }
 
-  // Calculate actual last day of month
-  const lastDay = new Date(year, month, 0).getDate();
-  const endDateFormatted = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-
-  return {
-    period: {
+  let period: any;
+  if (isMonthly && month && year) {
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDateFormatted = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    period = {
+      scope: 'monthly',
+      label: `${MONTH_NAMES[month - 1]} ${year}`,
       month,
       month_name: MONTH_NAMES[month - 1],
       year,
       start_date: `${year}-${String(month).padStart(2, '0')}-01`,
       end_date: endDateFormatted,
-    },
+    };
+  } else {
+    period = {
+      scope: 'all_time',
+      label: 'All-Time Corporate Sales',
+      month: null,
+      month_name: null,
+      year: null,
+      start_date: null,
+      end_date: null,
+    };
+  }
+
+  return {
+    period,
     summary: {
       total_sales: Math.round(totalSales * 100) / 100,
       total_payments: totalPayments,
@@ -210,18 +243,34 @@ export async function fetchSalesLeaderboard(month: number, year: number): Promis
 }
 
 export async function fetchSalesBreakdown(
-  month: number,
-  year: number,
+  month?: number,
+  year?: number,
   agentFilter?: string
 ): Promise<{
-  period: { month: number; month_name: string; year: number; start_date: string; end_date: string };
+  period: {
+    scope: 'all_time' | 'monthly';
+    label: string;
+    month?: number | null;
+    month_name?: string | null;
+    year?: number | null;
+    start_date?: string | null;
+    end_date?: string | null;
+  };
   summary: { total_sales: number; total_payments: number; total_invoices: number; salesperson_count: number };
   breakdown: AgentBreakdownEntry[];
 }> {
-  const startStr = `${year}-${String(month).padStart(2, '0')}-01T00:00:00.000Z`;
-  const nextMonth = month === 12 ? 1 : month + 1;
-  const nextYear = month === 12 ? year + 1 : year;
-  const endStr = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00.000Z`;
+  let dateClause = '';
+  const params: any[] = [];
+  const isMonthly = Boolean(month && year);
+
+  if (isMonthly) {
+    const startStr = `${year}-${String(month).padStart(2, '0')}-01T00:00:00.000Z`;
+    const nextMonth = month === 12 ? 1 : month! + 1;
+    const nextYear = month === 12 ? year! + 1 : year;
+    const endStr = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00.000Z`;
+    dateClause = `AND p.payment_date >= $1 AND p.payment_date < $2`;
+    params.push(startStr, endStr);
+  }
 
   const sql = `
     WITH monthly_payments AS (
@@ -244,8 +293,8 @@ export async function fetchSalesBreakdown(
       FROM payment p
       LEFT JOIN agent a ON (p.linked_agent = a.bubble_id OR p.linked_agent = a.id::text)
       LEFT JOIN "user" u ON (p.linked_agent = u.bubble_id OR p.linked_agent = u.id::text)
-      WHERE p.payment_date >= $1 AND p.payment_date < $2
-        AND p.verified_by IS NOT NULL
+      WHERE p.verified_by IS NOT NULL
+        ${dateClause}
     )
     SELECT 
       mp.payment_id,
@@ -272,7 +321,7 @@ export async function fetchSalesBreakdown(
     ORDER BY salesperson_name, invoice_number, mp.payment_date ASC;
   `;
 
-  const result = await executeQuery(sql, [startStr, endStr]);
+  const result = await executeQuery(sql, params);
 
   // Group by salesperson -> invoice -> payments
   const agentMap = new Map<string, {
@@ -367,17 +416,33 @@ export async function fetchSalesBreakdown(
     });
   }
 
-  const lastDay = new Date(year, month, 0).getDate();
-  const endDateFormatted = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-
-  return {
-    period: {
+  let period: any;
+  if (isMonthly && month && year) {
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDateFormatted = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    period = {
+      scope: 'monthly',
+      label: `${MONTH_NAMES[month - 1]} ${year}`,
       month,
       month_name: MONTH_NAMES[month - 1],
       year,
       start_date: `${year}-${String(month).padStart(2, '0')}-01`,
       end_date: endDateFormatted,
-    },
+    };
+  } else {
+    period = {
+      scope: 'all_time',
+      label: 'All-Time Corporate Sales',
+      month: null,
+      month_name: null,
+      year: null,
+      start_date: null,
+      end_date: null,
+    };
+  }
+
+  return {
+    period,
     summary: {
       total_sales: Math.round(totalSales * 100) / 100,
       total_payments: totalPayments,
@@ -416,9 +481,10 @@ export async function salesRoutes(app: FastifyInstance) {
   ) => {
     if (!checkSalesAuth(request, reply)) return;
 
-    const { month: rawMonth, year: rawYear, format } = request.query;
-    const month = parseMonth(rawMonth);
-    const year = parseYear(rawYear);
+    const { month: rawMonth, year: rawYear, format, scope, all } = request.query;
+    const isExplicitMonthly = Boolean(rawMonth && rawYear && scope !== 'all' && all !== 'true' && all !== true);
+    const month = isExplicitMonthly ? parseMonth(rawMonth) : undefined;
+    const year = isExplicitMonthly ? parseYear(rawYear) : undefined;
 
     const data = await fetchSalesLeaderboard(month, year);
 
@@ -436,7 +502,9 @@ export async function salesRoutes(app: FastifyInstance) {
       ]);
 
       const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
-      const filename = `sales_leaderboard_${data.period.year}_${String(data.period.month).padStart(2, '0')}.csv`;
+      const filename = data.period.year && data.period.month
+        ? `sales_leaderboard_${data.period.year}_${String(data.period.month).padStart(2, '0')}.csv`
+        : 'sales_leaderboard_all_time.csv';
 
       return reply
         .header('Content-Type', 'text/csv; charset=utf-8')
@@ -446,7 +514,8 @@ export async function salesRoutes(app: FastifyInstance) {
 
     // Summary text format
     if (format === 'summary') {
-      const summaryText = `Sales Leaderboard (${data.period.month_name} ${data.period.year}): ${data.summary.salesperson_count} sales persons | Total Verified Sales: RM ${data.summary.total_sales.toLocaleString('en-MY', { minimumFractionDigits: 2 })} across ${data.summary.total_payments} verified payments. Top seller: ${data.leaderboard[0]?.salesperson_name || 'N/A'} (RM ${data.leaderboard[0]?.total_verified_sales.toLocaleString('en-MY', { minimumFractionDigits: 2 }) || '0.00'}).`;
+      const periodLabel = data.period.scope === 'monthly' ? ` (${data.period.month_name} ${data.period.year})` : ' (All-Time Corporate)';
+      const summaryText = `Sales Leaderboard${periodLabel}: ${data.summary.salesperson_count} sales persons | Total Verified Sales: RM ${data.summary.total_sales.toLocaleString('en-MY', { minimumFractionDigits: 2 })} across ${data.summary.total_payments} verified payments. Top seller: ${data.leaderboard[0]?.salesperson_name || 'N/A'} (RM ${data.leaderboard[0]?.total_verified_sales.toLocaleString('en-MY', { minimumFractionDigits: 2 }) || '0.00'}).`;
       return reply.type('text/plain; charset=utf-8').send(summaryText);
     }
 
@@ -465,9 +534,10 @@ export async function salesRoutes(app: FastifyInstance) {
   ) => {
     if (!checkSalesAuth(request, reply)) return;
 
-    const { month: rawMonth, year: rawYear, format, agent } = request.query;
-    const month = parseMonth(rawMonth);
-    const year = parseYear(rawYear);
+    const { month: rawMonth, year: rawYear, format, agent, scope, all } = request.query;
+    const isExplicitMonthly = Boolean(rawMonth && rawYear && scope !== 'all' && all !== 'true' && all !== true);
+    const month = isExplicitMonthly ? parseMonth(rawMonth) : undefined;
+    const year = isExplicitMonthly ? parseYear(rawYear) : undefined;
 
     const data = await fetchSalesBreakdown(month, year, agent);
 
@@ -513,7 +583,9 @@ export async function salesRoutes(app: FastifyInstance) {
       }
 
       const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
-      const filename = `sales_breakdown_${data.period.year}_${String(data.period.month).padStart(2, '0')}.csv`;
+      const filename = data.period.year && data.period.month
+        ? `sales_breakdown_${data.period.year}_${String(data.period.month).padStart(2, '0')}.csv`
+        : 'sales_breakdown_all_time.csv';
 
       return reply
         .header('Content-Type', 'text/csv; charset=utf-8')
@@ -523,7 +595,8 @@ export async function salesRoutes(app: FastifyInstance) {
 
     // Summary text format
     if (format === 'summary') {
-      const summaryText = `Sales Breakdown (${data.period.month_name} ${data.period.year}): ${data.summary.salesperson_count} sales persons, ${data.summary.total_invoices} invoices, ${data.summary.total_payments} verified payments totaling RM ${data.summary.total_sales.toLocaleString('en-MY', { minimumFractionDigits: 2 })}.`;
+      const periodLabel = data.period.scope === 'monthly' ? ` (${data.period.month_name} ${data.period.year})` : ' (All-Time Corporate)';
+      const summaryText = `Sales Breakdown${periodLabel}: ${data.summary.salesperson_count} sales persons, ${data.summary.total_invoices} invoices, ${data.summary.total_payments} verified payments totaling RM ${data.summary.total_sales.toLocaleString('en-MY', { minimumFractionDigits: 2 })}.`;
       return reply.type('text/plain; charset=utf-8').send(summaryText);
     }
 
@@ -541,10 +614,10 @@ export async function salesRoutes(app: FastifyInstance) {
   ) => {
     if (!checkSalesAuth(request, reply)) return;
 
-    const { month: rawMonth, year: rawYear, min_paid_pct, format, scope } = request.query;
-    const isMonthly = Boolean(rawMonth || scope === 'period');
-    const month = isMonthly ? parseMonth(rawMonth) : undefined;
-    const year = isMonthly ? parseYear(rawYear) : undefined;
+    const { month: rawMonth, year: rawYear, min_paid_pct, format, scope, all } = request.query;
+    const isExplicitMonthly = Boolean(rawMonth && rawYear && scope !== 'all' && all !== 'true' && all !== true);
+    const month = isExplicitMonthly ? parseMonth(rawMonth) : undefined;
+    const year = isExplicitMonthly ? parseYear(rawYear) : undefined;
     const minPaidPct = min_paid_pct !== undefined ? Number(min_paid_pct) : undefined;
 
     const data = await fetchPerformanceMetrics({ month, year, minPaidPct });
@@ -567,8 +640,17 @@ export async function salesRoutes(app: FastifyInstance) {
   for (const prefix of ['/api/sales', '/v1/sales']) {
     // Leaderboard
     app.get<{ Querystring: SalesLeaderboardQuery }>(`${prefix}/leaderboard`, leaderboardHandler);
+    app.get<{ Querystring: SalesLeaderboardQuery }>(`${prefix}/all/leaderboard`, leaderboardHandler);
     app.get<{ Querystring: SalesLeaderboardQuery }>(
       `${prefix}/october`,
+      async (request, reply) => {
+        request.query.month = 10;
+        request.query.year = request.query.year || 2026;
+        return leaderboardHandler(request, reply);
+      }
+    );
+    app.get<{ Querystring: SalesLeaderboardQuery }>(
+      `${prefix}/october/leaderboard`,
       async (request, reply) => {
         request.query.month = 10;
         request.query.year = request.query.year || 2026;
@@ -578,6 +660,10 @@ export async function salesRoutes(app: FastifyInstance) {
 
     // Breakdown (Agent -> Invoices -> Payments)
     app.get<{ Querystring: SalesLeaderboardQuery }>(`${prefix}/breakdown`, breakdownHandler);
+    app.get<{ Querystring: SalesLeaderboardQuery }>(`${prefix}/agents/invoices`, breakdownHandler);
+    app.get<{ Querystring: SalesLeaderboardQuery }>(`${prefix}/all/breakdown`, breakdownHandler);
+    app.get<{ Querystring: SalesLeaderboardQuery }>(`${prefix}/all/invoices`, breakdownHandler);
+    app.get<{ Querystring: SalesLeaderboardQuery }>(`${prefix}/all/agents`, breakdownHandler);
     app.get<{ Querystring: SalesLeaderboardQuery }>(
       `${prefix}/october/breakdown`,
       async (request, reply) => {
@@ -589,6 +675,8 @@ export async function salesRoutes(app: FastifyInstance) {
 
     // Corporate Performance Metrics (Total Sales, Total Projects, Total kWp)
     app.get(`${prefix}/metrics`, metricsHandler);
+    app.get(`${prefix}/all`, metricsHandler);
+    app.get(`${prefix}/all/metrics`, metricsHandler);
     app.get(`${prefix}/summary`, metricsHandler);
     app.get(`${prefix}/corporate-metrics`, metricsHandler);
     app.get(
