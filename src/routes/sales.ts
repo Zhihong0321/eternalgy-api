@@ -14,6 +14,19 @@ interface SalesLeaderboardQuery {
   pass?: string;
 }
 
+interface CorporateMetricsQuery {
+  month?: string | number;
+  year?: string | number;
+  min_paid_pct?: string | number;
+  format?: 'json' | 'summary';
+  scope?: string;
+  key?: string;
+  apiKey?: string;
+  secret?: string;
+  password?: string;
+  pass?: string;
+}
+
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
@@ -523,12 +536,12 @@ export async function salesRoutes(app: FastifyInstance) {
 
   // 3. Performance Metrics handler (Total Sales, Total Projects, Total kWp)
   const metricsHandler = async (
-    request: FastifyRequest<{ Querystring: any }>,
+    request: FastifyRequest<{ Querystring: CorporateMetricsQuery }>,
     reply: FastifyReply
   ) => {
     if (!checkSalesAuth(request, reply)) return;
 
-    const { month: rawMonth, year: rawYear, min_paid_pct, format, scope } = request.query || {};
+    const { month: rawMonth, year: rawYear, min_paid_pct, format, scope } = request.query;
     const isMonthly = Boolean(rawMonth || scope === 'period');
     const month = isMonthly ? parseMonth(rawMonth) : undefined;
     const year = isMonthly ? parseYear(rawYear) : undefined;
