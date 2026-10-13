@@ -13,6 +13,7 @@ export interface AuthorizationResult {
   allowed: boolean;
   reason?: string;
   tablePolicy?: TablePolicy;
+  resolvedTableName?: string;
   rowScopeConstraint?: { column: string; value: any };
 }
 
@@ -26,16 +27,59 @@ export class PolicyEngine {
     action: Action,
     authContext: AuthContext
   ): AuthorizationResult {
+    const lowerName = tableName.toLowerCase();
+    const normalizedName = lowerName.replace(/[\s-]+/g, '_');
+    const singularName = normalizedName.endsWith('s') ? normalizedName.slice(0, -1) : normalizedName;
+
     // 1. Check globally blocked tables
-    if (GLOBALLY_BLOCKED_TABLES.has(tableName.toLowerCase())) {
-      return {
-        allowed: false,
-        reason: `Access to table '${tableName}' is strictly restricted by gateway security policy.`,
-      };
+    if (GLOBALLY_BLOCKED_TABLES.has(lowerName) || GLOBALLY_BLOCKED_TABLES.has(normalizedName)) {
+      const isElevatedRole = keyRecord.role === 'ceo' || authContext.role === 'ceo' || authContext.role === 'admin';
+      const isExplicitlyAuthorized = Boolean(
+        keyRecord.tables[tableName] ||
+        keyRecord.tables[lowerName] ||
+        keyRecord.tables[normalizedName] ||
+        keyRecord.tables[singularName]
+      );
+      const isDomainTable =
+        lowerName === 'user' ||
+        normalizedName === 'user' ||
+        lowerName === 'users' ||
+        normalizedName === 'users';
+
+      if (!isElevatedRole || !isExplicitlyAuthorized || !isDomainTable) {
+        return {
+          allowed: false,
+          reason: `Access to table '${tableName}' is strictly restricted by gateway security policy.`,
+        };
+      }
     }
 
     // 2. Check if table is configured in this API key's permissions
-    const tablePolicy = keyRecord.tables[tableName];
+    let tablePolicy = keyRecord.tables[tableName];
+    let resolvedTableName = tableName;
+
+    if (!tablePolicy && keyRecord.tables[lowerName]) {
+      tablePolicy = keyRecord.tables[lowerName];
+      resolvedTableName = lowerName;
+    }
+    if (!tablePolicy && keyRecord.tables[normalizedName]) {
+      tablePolicy = keyRecord.tables[normalizedName];
+      resolvedTableName = normalizedName;
+    }
+    if (!tablePolicy && keyRecord.tables[singularName]) {
+      tablePolicy = keyRecord.tables[singularName];
+      resolvedTableName = singularName;
+    }
+    if (!tablePolicy) {
+      if (normalizedName === 'submitted_payment' && keyRecord.tables['submited_payment']) {
+        tablePolicy = keyRecord.tables['submited_payment'];
+        resolvedTableName = 'submited_payment';
+      } else if (normalizedName === 'submited_payment' && keyRecord.tables['submitted_payment']) {
+        tablePolicy = keyRecord.tables['submitted_payment'];
+        resolvedTableName = 'submitted_payment';
+      }
+    }
+
     if (!tablePolicy) {
       return {
         allowed: false,
@@ -70,6 +114,7 @@ export class PolicyEngine {
     return {
       allowed: true,
       tablePolicy,
+      resolvedTableName,
       rowScopeConstraint,
     };
   }

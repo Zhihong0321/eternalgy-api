@@ -142,6 +142,28 @@ class KeyService {
         proxies: ROLE_PROXY_TEMPLATES.product_manager,
         createdAt: new Date().toISOString(),
       },
+      {
+        id: 'key_ceo2026',
+        name: 'CEO - Executive Read Only',
+        apiKey: 'ceo2026',
+        isActive: true,
+        role: 'ceo',
+        rateLimitRpm: 120,
+        tables: ROLE_TEMPLATES.ceo,
+        proxies: ROLE_PROXY_TEMPLATES.ceo,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: 'key_ceo2026_hyphen',
+        name: 'CEO - Executive Read Only (Hyphen Alias)',
+        apiKey: '-ceo2026',
+        isActive: true,
+        role: 'ceo',
+        rateLimitRpm: 120,
+        tables: ROLE_TEMPLATES.ceo,
+        proxies: ROLE_PROXY_TEMPLATES.ceo,
+        createdAt: new Date().toISOString(),
+      },
     ];
 
     for (const key of defaultKeys) {
@@ -222,6 +244,24 @@ class KeyService {
         rateLimitRpm: 120,
         tables: ROLE_TEMPLATES.product_manager,
         proxies: ROLE_PROXY_TEMPLATES.product_manager,
+      },
+      {
+        id: 'key_ceo2026',
+        name: 'CEO - Executive Read Only',
+        apiKey: 'ceo2026',
+        role: 'ceo',
+        rateLimitRpm: 120,
+        tables: ROLE_TEMPLATES.ceo,
+        proxies: ROLE_PROXY_TEMPLATES.ceo,
+      },
+      {
+        id: 'key_ceo2026_hyphen',
+        name: 'CEO - Executive Read Only (Hyphen Alias)',
+        apiKey: '-ceo2026',
+        role: 'ceo',
+        rateLimitRpm: 120,
+        tables: ROLE_TEMPLATES.ceo,
+        proxies: ROLE_PROXY_TEMPLATES.ceo,
       },
     ];
 

@@ -31,9 +31,11 @@ export async function dataRoutes(app: FastifyInstance) {
       const { table } = request.params;
       const { limit, offset, sort, order, ...rawFilters } = request.query;
 
+      const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
+
       // Master admin bypass
       if (request.isAdmin) {
-        if (GLOBALLY_BLOCKED_TABLES.has(table.toLowerCase())) {
+        if (GLOBALLY_BLOCKED_TABLES.has(targetTable) && targetTable !== 'user' && targetTable !== 'users') {
           return reply.status(403).send({
             statusCode: 403,
             error: 'Forbidden',
@@ -42,7 +44,7 @@ export async function dataRoutes(app: FastifyInstance) {
         }
 
         const query = QueryBuilder.buildSelect({
-          table,
+          table: targetTable,
           filter: rawFilters,
           limit: limit ? Number(limit) : undefined,
           offset: offset ? Number(offset) : undefined,
@@ -75,8 +77,10 @@ export async function dataRoutes(app: FastifyInstance) {
         });
       }
 
+      const queryTable = auth.resolvedTableName || targetTable;
+
       const query = QueryBuilder.buildSelect({
-        table,
+        table: queryTable,
         allowedColumns: auth.tablePolicy?.allowedColumns,
         filter: rawFilters,
         rowScopeConstraint: auth.rowScopeConstraint,
@@ -107,6 +111,7 @@ export async function dataRoutes(app: FastifyInstance) {
     '/v1/data/:table/:id',
     async (request, reply) => {
       const { table, id } = request.params;
+      const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
 
       if (!id) {
         return reply.status(400).send({ statusCode: 400, message: 'Missing record id' });
@@ -114,7 +119,7 @@ export async function dataRoutes(app: FastifyInstance) {
 
       if (request.isAdmin) {
         const query = QueryBuilder.buildSelect({
-          table,
+          table: targetTable,
           filter: { id },
           limit: 1,
         });
@@ -140,8 +145,9 @@ export async function dataRoutes(app: FastifyInstance) {
         });
       }
 
+      const queryTable = auth.resolvedTableName || targetTable;
       const query = QueryBuilder.buildSelect({
-        table,
+        table: queryTable,
         allowedColumns: auth.tablePolicy?.allowedColumns,
         filter: { id },
         rowScopeConstraint: auth.rowScopeConstraint,
@@ -169,9 +175,10 @@ export async function dataRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const { table } = request.params;
       const payload = request.body;
+      const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
 
       if (request.isAdmin) {
-        const query = QueryBuilder.buildInsert(table, payload);
+        const query = QueryBuilder.buildInsert(targetTable, payload);
         const result = await executeQuery(query.text, query.params);
         return reply.status(201).send({ data: result.rows[0] });
       }
@@ -200,8 +207,9 @@ export async function dataRoutes(app: FastifyInstance) {
         });
       }
 
+      const queryTable = auth.resolvedTableName || targetTable;
       const query = QueryBuilder.buildInsert(
-        table,
+        queryTable,
         validation.sanitized!,
         auth.rowScopeConstraint
       );
@@ -221,13 +229,14 @@ export async function dataRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const { table, id } = request.params;
       const payload = request.body;
+      const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
 
       if (!id) {
         return reply.status(400).send({ statusCode: 400, message: 'Missing record id' });
       }
 
       if (request.isAdmin) {
-        const query = QueryBuilder.buildUpdate(table, id, payload);
+        const query = QueryBuilder.buildUpdate(targetTable, id, payload);
         const result = await executeQuery(query.text, query.params);
         if (result.rows.length === 0) {
           return reply.status(404).send({ statusCode: 404, message: 'Record not found' });
@@ -259,8 +268,9 @@ export async function dataRoutes(app: FastifyInstance) {
         });
       }
 
+      const queryTable = auth.resolvedTableName || targetTable;
       const query = QueryBuilder.buildUpdate(
-        table,
+        queryTable,
         id,
         validation.sanitized!,
         auth.rowScopeConstraint
@@ -286,13 +296,14 @@ export async function dataRoutes(app: FastifyInstance) {
     '/v1/data/:table/:id',
     async (request, reply) => {
       const { table, id } = request.params;
+      const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
 
       if (!id) {
         return reply.status(400).send({ statusCode: 400, message: 'Missing record id' });
       }
 
       if (request.isAdmin) {
-        const query = QueryBuilder.buildDelete(table, id);
+        const query = QueryBuilder.buildDelete(targetTable, id);
         const result = await executeQuery(query.text, query.params);
         if (result.rows.length === 0) {
           return reply.status(404).send({ statusCode: 404, message: 'Record not found' });
@@ -315,7 +326,8 @@ export async function dataRoutes(app: FastifyInstance) {
         });
       }
 
-      const query = QueryBuilder.buildDelete(table, id, auth.rowScopeConstraint);
+      const queryTable = auth.resolvedTableName || targetTable;
+      const query = QueryBuilder.buildDelete(queryTable, id, auth.rowScopeConstraint);
       const result = await executeQuery(query.text, query.params);
 
       if (result.rows.length === 0) {

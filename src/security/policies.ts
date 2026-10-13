@@ -104,6 +104,25 @@ export const ROLE_TEMPLATES: Record<string, Record<string, TablePolicy>> = {
       actions: ['read', 'create', 'update', 'delete'],
     },
   },
+
+  // CEO / Executive Management (Read-only access across Invoice, User, Payment, Submitted Payment)
+  ceo: {
+    invoice: {
+      actions: ['read'],
+    },
+    user: {
+      actions: ['read'],
+    },
+    payment: {
+      actions: ['read'],
+    },
+    submited_payment: {
+      actions: ['read'],
+    },
+    submitted_payment: {
+      actions: ['read'],
+    },
+  },
 };
 
 /**
@@ -117,6 +136,9 @@ export const ROLE_PROXY_TEMPLATES: Record<string, Record<string, { methods?: str
     calculator: {},
   },
   product_manager: {
+    calculator: {},
+  },
+  ceo: {
     calculator: {},
   },
 };
@@ -172,6 +194,26 @@ class PolicyStore {
       role: 'product_manager',
       rateLimitRpm: 120,
       tables: ROLE_TEMPLATES.product_manager,
+    });
+
+    this.registerPolicy({
+      id: 'key_ceo2026',
+      name: 'CEO - Executive Read Only',
+      apiKey: 'ceo2026',
+      isActive: true,
+      role: 'ceo',
+      rateLimitRpm: 120,
+      tables: ROLE_TEMPLATES.ceo,
+    });
+
+    this.registerPolicy({
+      id: 'key_ceo2026_hyphen',
+      name: 'CEO - Executive Read Only (Hyphen Alias)',
+      apiKey: '-ceo2026',
+      isActive: true,
+      role: 'ceo',
+      rateLimitRpm: 120,
+      tables: ROLE_TEMPLATES.ceo,
     });
   }
 

@@ -209,8 +209,63 @@ class SchemaService {
       { name: 'updated_at', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
     ];
 
+    const invoiceCols: ColumnMetadata[] = [
+      { name: 'id', dataType: 'integer', isNullable: false, defaultValue: null, isPrimaryKey: true },
+      { name: 'invoice_no', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'customer_id', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'linked_customer', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'paid_amount', dataType: 'numeric', isNullable: true, defaultValue: null },
+      { name: 'total_amount', dataType: 'numeric', isNullable: true, defaultValue: null },
+      { name: 'status', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'last_payment_date', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
+      { name: '1st_payment_date', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
+      { name: 'created_at', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
+      { name: 'updated_at', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
+    ];
+
+    const userCols: ColumnMetadata[] = [
+      { name: 'id', dataType: 'integer', isNullable: false, defaultValue: null, isPrimaryKey: true },
+      { name: 'name', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'email', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'role', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'phone', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'is_active', dataType: 'boolean', isNullable: true, defaultValue: null },
+      { name: 'created_at', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
+      { name: 'updated_at', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
+    ];
+
+    const paymentCols: ColumnMetadata[] = [
+      { name: 'id', dataType: 'integer', isNullable: false, defaultValue: null, isPrimaryKey: true },
+      { name: 'payment_no', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'invoice_id', dataType: 'integer', isNullable: true, defaultValue: null },
+      { name: 'amount', dataType: 'numeric', isNullable: true, defaultValue: null },
+      { name: 'payment_method', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'status', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'payment_date', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
+      { name: 'created_at', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
+      { name: 'updated_at', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
+    ];
+
+    const submittedPaymentCols: ColumnMetadata[] = [
+      { name: 'id', dataType: 'integer', isNullable: false, defaultValue: null, isPrimaryKey: true },
+      { name: 'submission_no', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'invoice_id', dataType: 'integer', isNullable: true, defaultValue: null },
+      { name: 'customer_id', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'amount', dataType: 'numeric', isNullable: true, defaultValue: null },
+      { name: 'receipt_url', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'status', dataType: 'text', isNullable: true, defaultValue: null },
+      { name: 'submitted_at', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
+      { name: 'created_at', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
+      { name: 'updated_at', dataType: 'timestamp with time zone', isNullable: true, defaultValue: null },
+    ];
+
     this.cache.set('package', packageCols);
     this.cache.set('product', productCols);
+    this.cache.set('invoice', invoiceCols);
+    this.cache.set('user', userCols);
+    this.cache.set('payment', paymentCols);
+    this.cache.set('submited_payment', submittedPaymentCols);
+    this.cache.set('submitted_payment', submittedPaymentCols);
 
     this.relationshipsCache = [
       {
@@ -244,6 +299,22 @@ class SchemaService {
         targetColumn: 'bubble_id',
         type: 'logical_relation',
         description: 'Product categorization (e.g. Solar Panel, Inverter, Battery, Accessory)',
+      },
+      {
+        sourceTable: 'payment',
+        sourceColumn: 'invoice_id',
+        targetTable: 'invoice',
+        targetColumn: 'id',
+        type: 'logical_relation',
+        description: 'Invoice associated with this payment transaction',
+      },
+      {
+        sourceTable: 'submited_payment',
+        sourceColumn: 'invoice_id',
+        targetTable: 'invoice',
+        targetColumn: 'id',
+        type: 'logical_relation',
+        description: 'Invoice associated with this customer submitted payment receipt',
       },
     ];
     this.lastFetched = Date.now();
