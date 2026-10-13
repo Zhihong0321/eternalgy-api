@@ -413,6 +413,97 @@ describe('CEO API Key (ceo2026) - Read Only Access Control', () => {
       querySpy.mockRestore();
     });
 
+    it('serves agent, invoice, and payment breakdown via /api/sales/breakdown and /api/sales/october/breakdown', async () => {
+      const mockBreakdownRows = [
+        {
+          payment_id: 101,
+          payment_amount: 50000,
+          payment_date: '2026-10-05T08:00:00.000Z',
+          payment_method: 'Online Transfer',
+          verified_by: 'System Admin',
+          salesperson_name: 'Ng Zhan Yi',
+          email: 'louisng0705@gmail.com',
+          agent_code: null,
+          payment_linked_invoice: 'inv_101',
+          invoice_id: 1,
+          invoice_number: 'INV-101',
+          invoice_total_amount: 60000,
+          invoice_status: 'PAID',
+          invoice_date: '2026-10-04T08:00:00.000Z',
+          customer_name: 'Customer A',
+        },
+        {
+          payment_id: 102,
+          payment_amount: 10000,
+          payment_date: '2026-10-10T08:00:00.000Z',
+          payment_method: 'Online Transfer',
+          verified_by: 'System Admin',
+          salesperson_name: 'Ng Zhan Yi',
+          email: 'louisng0705@gmail.com',
+          agent_code: null,
+          payment_linked_invoice: 'inv_101',
+          invoice_id: 1,
+          invoice_number: 'INV-101',
+          invoice_total_amount: 60000,
+          invoice_status: 'PAID',
+          invoice_date: '2026-10-04T08:00:00.000Z',
+          customer_name: 'Customer A',
+        },
+        {
+          payment_id: 103,
+          payment_amount: 30000,
+          payment_date: '2026-10-12T08:00:00.000Z',
+          payment_method: 'CASH',
+          verified_by: 'System Admin',
+          salesperson_name: 'OLIVIER KOH CONG LEE',
+          email: 'mail2olivier@gmail.com',
+          agent_code: null,
+          payment_linked_invoice: 'inv_202',
+          invoice_id: 2,
+          invoice_number: 'INV-202',
+          invoice_total_amount: 30000,
+          invoice_status: 'PAID',
+          invoice_date: '2026-10-11T08:00:00.000Z',
+          customer_name: 'Customer B',
+        },
+      ];
+
+      const querySpy = vi.spyOn(poolModule, 'executeQuery').mockResolvedValue({
+        rows: mockBreakdownRows,
+      } as any);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/sales/october/breakdown?key=ceo2026',
+      });
+      expect(res.statusCode).toBe(200);
+      const json = res.json();
+      expect(json.success).toBe(true);
+      expect(json.breakdown).toHaveLength(2);
+
+      // Verify Ng Zhan Yi structure
+      const topSeller = json.breakdown[0];
+      expect(topSeller.salesperson_name).toBe('Ng Zhan Yi');
+      expect(topSeller.total_verified_sales).toBe(60000);
+      expect(topSeller.invoices).toHaveLength(1);
+      expect(topSeller.invoices[0].invoice_number).toBe('INV-101');
+      expect(topSeller.invoices[0].payments).toHaveLength(2);
+      expect(topSeller.invoices[0].payments[0].amount).toBe(50000);
+      expect(topSeller.invoices[0].payments[1].amount).toBe(10000);
+
+      // Test CSV format
+      const resCsv = await app.inject({
+        method: 'GET',
+        url: '/api/sales/october/breakdown?key=ceo2026&format=csv',
+      });
+      expect(resCsv.statusCode).toBe(200);
+      expect(resCsv.headers['content-type']).toContain('text/csv');
+      expect(resCsv.body).toContain('INV-101');
+      expect(resCsv.body).toContain('50000.00');
+
+      querySpy.mockRestore();
+    });
+
     it('rejects unauthenticated requests with 401', async () => {
       const res = await app.inject({
         method: 'GET',
@@ -428,7 +519,7 @@ describe('CEO API Key (ceo2026) - Read Only Access Control', () => {
         headers: { 'x-api-key': 'eter_demo_catalog_key_2026' },
       });
       expect(res.statusCode).toBe(403);
-      expect(res.json().message).toContain('Access to the sales leaderboard requires CEO or administrator privileges');
+      expect(res.json().message).toContain('Access to sales reporting requires CEO or administrator privileges');
     });
   });
 });

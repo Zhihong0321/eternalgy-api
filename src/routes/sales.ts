@@ -6,6 +6,7 @@ interface SalesLeaderboardQuery {
   month?: string | number;
   year?: string | number;
   format?: 'json' | 'csv' | 'summary';
+  agent?: string;
   key?: string;
   apiKey?: string;
   secret?: string;
@@ -65,6 +66,36 @@ export interface LeaderboardEntry {
   invoices_count: number;
   email: string | null;
   agent_code: string | null;
+}
+
+export interface InvoicePaymentItem {
+  payment_id: number | string;
+  amount: number;
+  payment_date: string | null;
+  payment_method: string | null;
+  verified_by: string | null;
+}
+
+export interface AgentInvoiceItem {
+  invoice_number: string;
+  invoice_id: number | null;
+  invoice_total_amount: number | null;
+  invoice_status: string | null;
+  invoice_date: string | null;
+  customer_name: string | null;
+  total_paid_in_period: number;
+  payments: InvoicePaymentItem[];
+}
+
+export interface AgentBreakdownEntry {
+  rank: number;
+  salesperson_name: string;
+  email: string | null;
+  agent_code: string | null;
+  total_verified_sales: number;
+  payments_count: number;
+  invoices_count: number;
+  invoices: AgentInvoiceItem[];
 }
 
 export async function fetchSalesLeaderboard(month: number, year: number): Promise<{
@@ -165,27 +196,212 @@ export async function fetchSalesLeaderboard(month: number, year: number): Promis
   };
 }
 
+export async function fetchSalesBreakdown(
+  month: number,
+  year: number,
+  agentFilter?: string
+): Promise<{
+  period: { month: number; month_name: string; year: number; start_date: string; end_date: string };
+  summary: { total_sales: number; total_payments: number; total_invoices: number; salesperson_count: number };
+  breakdown: AgentBreakdownEntry[];
+}> {
+  const startStr = `${year}-${String(month).padStart(2, '0')}-01T00:00:00.000Z`;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  const endStr = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00.000Z`;
+
+  const sql = `
+    WITH monthly_payments AS (
+      SELECT 
+        p.id as payment_id,
+        p.amount as payment_amount,
+        p.payment_date,
+        p.payment_method,
+        p.verified_by,
+        p.linked_invoice,
+        p.linked_agent,
+        COALESCE(
+          (SELECT a2.name FROM agent a2 JOIN "user" u2 ON u2.linked_agent_profile = a2.bubble_id WHERE u2.bubble_id = p.linked_agent LIMIT 1),
+          a.name, 
+          u.name, 
+          'Unknown'
+        ) as canonical_name,
+        COALESCE(a.email, u.email, '') as email,
+        COALESCE(a.agent_code, u.agent_code, '') as agent_code
+      FROM payment p
+      LEFT JOIN agent a ON (p.linked_agent = a.bubble_id OR p.linked_agent = a.id::text)
+      LEFT JOIN "user" u ON (p.linked_agent = u.bubble_id OR p.linked_agent = u.id::text)
+      WHERE p.payment_date >= $1 AND p.payment_date < $2
+        AND p.verified_by IS NOT NULL
+    )
+    SELECT 
+      mp.payment_id,
+      mp.payment_amount,
+      mp.payment_date,
+      mp.payment_method,
+      mp.verified_by,
+      TRIM(mp.canonical_name) as salesperson_name,
+      NULLIF(mp.email, '') as email,
+      NULLIF(mp.agent_code, '') as agent_code,
+      mp.linked_invoice as payment_linked_invoice,
+      inv.id as invoice_id,
+      COALESCE(inv.invoice_number, inv.bubble_id, mp.linked_invoice, 'No Linked Invoice') as invoice_number,
+      inv.total_amount as invoice_total_amount,
+      inv.status as invoice_status,
+      inv.invoice_date,
+      COALESCE(inv.customer_name_snapshot, inv.linked_customer) as customer_name
+    FROM monthly_payments mp
+    LEFT JOIN invoice inv ON (
+      mp.linked_invoice = inv.bubble_id 
+      OR mp.linked_invoice = inv.id::text 
+      OR mp.linked_invoice = inv.invoice_number
+    )
+    ORDER BY salesperson_name, invoice_number, mp.payment_date ASC;
+  `;
+
+  const result = await executeQuery(sql, [startStr, endStr]);
+
+  // Group by salesperson -> invoice -> payments
+  const agentMap = new Map<string, {
+    salesperson_name: string;
+    email: string | null;
+    agent_code: string | null;
+    total_sales: number;
+    payments_count: number;
+    invoicesMap: Map<string, AgentInvoiceItem>;
+  }>();
+
+  for (const row of result.rows) {
+    const agentName = row.salesperson_name || 'Unknown';
+    if (agentFilter && !agentName.toLowerCase().includes(agentFilter.toLowerCase())) {
+      continue;
+    }
+
+    if (!agentMap.has(agentName)) {
+      agentMap.set(agentName, {
+        salesperson_name: agentName,
+        email: row.email || null,
+        agent_code: row.agent_code || null,
+        total_sales: 0,
+        payments_count: 0,
+        invoicesMap: new Map(),
+      });
+    }
+
+    const agentRecord = agentMap.get(agentName)!;
+    if (row.email && !agentRecord.email) agentRecord.email = row.email;
+    if (row.agent_code && !agentRecord.agent_code) agentRecord.agent_code = row.agent_code;
+
+    const pAmount = Number(row.payment_amount) || 0;
+    agentRecord.total_sales += pAmount;
+    agentRecord.payments_count += 1;
+
+    const invKey = row.invoice_number || 'Unknown';
+    if (!agentRecord.invoicesMap.has(invKey)) {
+      agentRecord.invoicesMap.set(invKey, {
+        invoice_number: invKey,
+        invoice_id: row.invoice_id != null ? Number(row.invoice_id) : null,
+        invoice_total_amount: row.invoice_total_amount != null ? Number(row.invoice_total_amount) : null,
+        invoice_status: row.invoice_status || null,
+        invoice_date: row.invoice_date ? new Date(row.invoice_date).toISOString() : null,
+        customer_name: row.customer_name || null,
+        total_paid_in_period: 0,
+        payments: [],
+      });
+    }
+
+    const invRecord = agentRecord.invoicesMap.get(invKey)!;
+    invRecord.total_paid_in_period += pAmount;
+    invRecord.payments.push({
+      payment_id: row.payment_id,
+      amount: Math.round(pAmount * 100) / 100,
+      payment_date: row.payment_date ? new Date(row.payment_date).toISOString() : null,
+      payment_method: row.payment_method || null,
+      verified_by: row.verified_by || null,
+    });
+  }
+
+  // Sort agents by total_verified_sales descending, excluding 0 sales
+  const sortedAgents = Array.from(agentMap.values())
+    .filter((a) => a.total_sales > 0)
+    .sort((a, b) => b.total_sales - a.total_sales);
+
+  let totalSales = 0;
+  let totalPayments = 0;
+  let totalInvoices = 0;
+  const breakdown: AgentBreakdownEntry[] = [];
+
+  let rank = 1;
+  for (const agent of sortedAgents) {
+    totalSales += agent.total_sales;
+    totalPayments += agent.payments_count;
+    totalInvoices += agent.invoicesMap.size;
+
+    const invoicesList = Array.from(agent.invoicesMap.values()).map((inv) => ({
+      ...inv,
+      total_paid_in_period: Math.round(inv.total_paid_in_period * 100) / 100,
+    }));
+
+    breakdown.push({
+      rank: rank++,
+      salesperson_name: agent.salesperson_name,
+      email: agent.email,
+      agent_code: agent.agent_code,
+      total_verified_sales: Math.round(agent.total_sales * 100) / 100,
+      payments_count: agent.payments_count,
+      invoices_count: invoicesList.length,
+      invoices: invoicesList,
+    });
+  }
+
+  const lastDay = new Date(year, month, 0).getDate();
+  const endDateFormatted = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+  return {
+    period: {
+      month,
+      month_name: MONTH_NAMES[month - 1],
+      year,
+      start_date: `${year}-${String(month).padStart(2, '0')}-01`,
+      end_date: endDateFormatted,
+    },
+    summary: {
+      total_sales: Math.round(totalSales * 100) / 100,
+      total_payments: totalPayments,
+      total_invoices: totalInvoices,
+      salesperson_count: breakdown.length,
+    },
+    breakdown,
+  };
+}
+
 export async function salesRoutes(app: FastifyInstance) {
   // Enforce API key authentication
   app.addHook('preHandler', authenticateApiKey);
 
-  const handler = async (
-    request: FastifyRequest<{ Querystring: SalesLeaderboardQuery }>,
-    reply: FastifyReply
-  ) => {
-    // Check permission: Admin, CEO, or key with payment permission
+  const checkSalesAuth = (request: FastifyRequest, reply: FastifyReply) => {
     const isAuthorized =
       request.isAdmin ||
       request.apiKeyRecord?.role === 'ceo' ||
       Boolean(request.apiKeyRecord?.tables?.payment);
 
     if (!isAuthorized) {
-      return reply.status(403).send({
+      reply.status(403).send({
         statusCode: 403,
         error: 'Forbidden',
-        message: 'Access to the sales leaderboard requires CEO or administrator privileges.',
+        message: 'Access to sales reporting requires CEO or administrator privileges.',
       });
+      return false;
     }
+    return true;
+  };
+
+  // 1. Leaderboard handler
+  const leaderboardHandler = async (
+    request: FastifyRequest<{ Querystring: SalesLeaderboardQuery }>,
+    reply: FastifyReply
+  ) => {
+    if (!checkSalesAuth(request, reply)) return;
 
     const { month: rawMonth, year: rawYear, format } = request.query;
     const month = parseMonth(rawMonth);
@@ -229,37 +445,105 @@ export async function salesRoutes(app: FastifyInstance) {
     });
   };
 
-  // Register main endpoint and shortcuts
-  app.get<{ Querystring: SalesLeaderboardQuery }>(
-    '/api/sales/leaderboard',
-    {
-      schema: {
-        summary: 'Monthly Sales Leaderboard',
-        description: 'Returns the ranked monthly sales leaderboard based on verified payments, sorted highest to lowest, excluding RM 0 sales.',
-        tags: ['Sales & Reporting'],
-      },
-    },
-    handler
-  );
+  // 2. Breakdown handler (Agent -> Invoices -> Payments)
+  const breakdownHandler = async (
+    request: FastifyRequest<{ Querystring: SalesLeaderboardQuery }>,
+    reply: FastifyReply
+  ) => {
+    if (!checkSalesAuth(request, reply)) return;
 
-  app.get<{ Querystring: SalesLeaderboardQuery }>('/v1/sales/leaderboard', handler);
+    const { month: rawMonth, year: rawYear, format, agent } = request.query;
+    const month = parseMonth(rawMonth);
+    const year = parseYear(rawYear);
 
-  // Direct convenience alias for October sales
-  app.get<{ Querystring: SalesLeaderboardQuery }>(
-    '/api/sales/october',
-    async (request, reply) => {
-      request.query.month = 10;
-      request.query.year = request.query.year || 2026;
-      return handler(request, reply);
+    const data = await fetchSalesBreakdown(month, year, agent);
+
+    // CSV format
+    if (format === 'csv') {
+      const headers = [
+        'Rank',
+        'Sales Person',
+        'Email',
+        'Agent Code',
+        'Invoice Number',
+        'Invoice Total Amount (RM)',
+        'Invoice Status',
+        'Customer',
+        'Payment ID',
+        'Payment Date',
+        'Payment Amount (RM)',
+        'Payment Method',
+        'Verified By',
+      ];
+
+      const rows: string[][] = [];
+      for (const agentEntry of data.breakdown) {
+        for (const invoice of agentEntry.invoices) {
+          for (const payment of invoice.payments) {
+            rows.push([
+              String(agentEntry.rank),
+              escapeCsv(agentEntry.salesperson_name),
+              escapeCsv(agentEntry.email),
+              escapeCsv(agentEntry.agent_code),
+              escapeCsv(invoice.invoice_number),
+              invoice.invoice_total_amount != null ? invoice.invoice_total_amount.toFixed(2) : '',
+              escapeCsv(invoice.invoice_status),
+              escapeCsv(invoice.customer_name),
+              escapeCsv(payment.payment_id),
+              escapeCsv(payment.payment_date),
+              payment.amount.toFixed(2),
+              escapeCsv(payment.payment_method),
+              escapeCsv(payment.verified_by),
+            ]);
+          }
+        }
+      }
+
+      const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+      const filename = `sales_breakdown_${data.period.year}_${String(data.period.month).padStart(2, '0')}.csv`;
+
+      return reply
+        .header('Content-Type', 'text/csv; charset=utf-8')
+        .header('Content-Disposition', `attachment; filename="${filename}"`)
+        .send(csvContent);
     }
-  );
 
-  app.get<{ Querystring: SalesLeaderboardQuery }>(
-    '/v1/sales/october',
-    async (request, reply) => {
-      request.query.month = 10;
-      request.query.year = request.query.year || 2026;
-      return handler(request, reply);
+    // Summary text format
+    if (format === 'summary') {
+      const summaryText = `Sales Breakdown (${data.period.month_name} ${data.period.year}): ${data.summary.salesperson_count} sales persons, ${data.summary.total_invoices} invoices, ${data.summary.total_payments} verified payments totaling RM ${data.summary.total_sales.toLocaleString('en-MY', { minimumFractionDigits: 2 })}.`;
+      return reply.type('text/plain; charset=utf-8').send(summaryText);
     }
-  );
+
+    // Default JSON format
+    return reply.send({
+      success: true,
+      statusCode: 200,
+      ...data,
+    });
+  };
+
+  // Register endpoints
+  for (const prefix of ['/api/sales', '/v1/sales']) {
+    // Leaderboard
+    app.get<{ Querystring: SalesLeaderboardQuery }>(`${prefix}/leaderboard`, leaderboardHandler);
+    app.get<{ Querystring: SalesLeaderboardQuery }>(
+      `${prefix}/october`,
+      async (request, reply) => {
+        request.query.month = 10;
+        request.query.year = request.query.year || 2026;
+        return leaderboardHandler(request, reply);
+      }
+    );
+
+    // Breakdown (Agent -> Invoices -> Payments)
+    app.get<{ Querystring: SalesLeaderboardQuery }>(`${prefix}/breakdown`, breakdownHandler);
+    app.get<{ Querystring: SalesLeaderboardQuery }>(
+      `${prefix}/october/breakdown`,
+      async (request, reply) => {
+        request.query.month = 10;
+        request.query.year = request.query.year || 2026;
+        return breakdownHandler(request, reply);
+      }
+    );
+  }
 }
