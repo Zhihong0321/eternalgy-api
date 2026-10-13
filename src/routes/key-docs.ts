@@ -112,23 +112,25 @@ The gateway provides fast, pre-aggregated endpoints calculated directly from ver
 - **Any Month / Year Breakdown**: \`GET ${host}/api/sales/breakdown?year=2026&month=10&key=${keyToUse}\`
 - **Filter by Specific Agent**: \`GET ${host}/api/sales/breakdown?year=2026&month=10&agent=Ng%20Zhan%20Yi&key=${keyToUse}\`
 - **Excel / CSV Download**: \`GET ${host}/api/sales/october/breakdown?key=${keyToUse}&format=csv\`
-- **Data Hierarchy**:
+
+### 📈 C. Corporate Performance Metrics (Total Sales, Total Projects, Total kWp)
+- **Live Corporate Metrics**: \`GET ${host}/api/sales/metrics?key=${keyToUse}\`
+- **Monthly Metrics**: \`GET ${host}/api/sales/october/metrics?key=${keyToUse}\` or \`GET ${host}/api/sales/metrics?year=2026&month=10&key=${keyToUse}\`
+- **Calculations & Formula**:
+  - \`total_sales\`: Customer Revenue / Total Paid Amount across invoices
+  - \`total_projects\`: Number of paid invoices (>0% payment or ≥59.9% installed)
+  - \`total_kwp\`: **Formula = linked package solar panel rating * panel qty / 1000**
+  - \`total_mwp\`: Capacity in Megawatt-peak (\`kwp / 1000\`)
+- **JSON Response**:
   \`\`\`json
   {
-    "salesperson_name": "Ng Zhan Yi",
-    "total_verified_sales": 105049.50,
-    "invoices": [
-      {
-        "invoice_number": "INV-1010002",
-        "invoice_total_amount": 32734.95,
-        "customer_name": "cust_1a70208b",
-        "total_paid_in_period": 20902.70,
-        "payments": [
-          { "payment_id": 105475, "amount": 1818.20, "payment_date": "2026-10-01", "payment_method": "CASH" },
-          { "payment_id": 105491, "amount": 19084.50, "payment_date": "2026-10-01", "payment_method": "EPP" }
-        ]
-      }
-    ]
+    "total_sales": 28149508.59,
+    "total_sales_formatted": "RM 28,149,508.59",
+    "total_projects": 925,
+    "total_kwp": 10750.99,
+    "total_kwp_formatted": "10,750.99 kWp",
+    "total_mwp_formatted": "10.75 MWp",
+    "formula": "linked package solar panel rating * panel qty / 1000"
   }
   \`\`\`
 

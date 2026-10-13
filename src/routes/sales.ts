@@ -514,7 +514,35 @@ export async function salesRoutes(app: FastifyInstance) {
       return reply.type('text/plain; charset=utf-8').send(summaryText);
     }
 
-    // Default JSON format
+    return reply.send({
+      success: true,
+      statusCode: 200,
+      ...data,
+    });
+  };
+
+  // 3. Performance Metrics handler (Total Sales, Total Projects, Total kWp)
+  const metricsHandler = async (
+    request: FastifyRequest<{ Querystring: any }>,
+    reply: FastifyReply
+  ) => {
+    if (!checkSalesAuth(request, reply)) return;
+
+    const { month: rawMonth, year: rawYear, min_paid_pct, format, scope } = request.query || {};
+    const isMonthly = Boolean(rawMonth || scope === 'period');
+    const month = isMonthly ? parseMonth(rawMonth) : undefined;
+    const year = isMonthly ? parseYear(rawYear) : undefined;
+    const minPaidPct = min_paid_pct !== undefined ? Number(min_paid_pct) : undefined;
+
+    const data = await fetchPerformanceMetrics({ month, year, minPaidPct });
+
+    // Summary text format
+    if (format === 'summary') {
+      const periodLabel = data.period ? ` (${data.period.month_name} ${data.period.year})` : ' (All-Time Corporate)';
+      const summaryText = `Corporate Performance Metrics${periodLabel}: Total Sales: ${data.total_sales_formatted} | Total Projects: ${data.total_projects} | Installed Capacity: ${data.total_kwp_formatted} (${data.total_mwp_formatted}).`;
+      return reply.type('text/plain; charset=utf-8').send(summaryText);
+    }
+
     return reply.send({
       success: true,
       statusCode: 200,
@@ -545,5 +573,211 @@ export async function salesRoutes(app: FastifyInstance) {
         return breakdownHandler(request, reply);
       }
     );
+
+    // Corporate Performance Metrics (Total Sales, Total Projects, Total kWp)
+    app.get(`${prefix}/metrics`, metricsHandler);
+    app.get(`${prefix}/summary`, metricsHandler);
+    app.get(`${prefix}/corporate-metrics`, metricsHandler);
+    app.get(
+      `${prefix}/october/metrics`,
+      async (request: any, reply) => {
+        request.query = request.query || {};
+        request.query.month = 10;
+        request.query.year = request.query.year || 2026;
+        return metricsHandler(request, reply);
+      }
+    );
   }
 }
+
+export interface PerformanceMetricsResult {
+  period?: {
+    month: number;
+    month_name: string;
+    year: number;
+  };
+  total_sales: number;
+  total_sales_formatted: string;
+  total_projects: number;
+  total_projects_description: string;
+  total_kwp: number;
+  total_kwp_formatted: string;
+  total_mwp_formatted: string;
+  formula: string;
+  breakdown_details: {
+    customer_revenue_rm: number;
+    total_verified_payments_rm: number;
+    total_contract_value_rm: number;
+    paid_invoices_count_gt_zero: number;
+    installed_projects_over_60_pct: number;
+    kwp_for_paid_gt_zero: number;
+    kwp_for_installed_over_60_pct: number;
+  };
+}
+
+export async function fetchPerformanceMetrics(options: {
+  month?: number;
+  year?: number;
+  minPaidPct?: number;
+}): Promise<PerformanceMetricsResult> {
+  const { month, year, minPaidPct } = options;
+
+  let dateFilterInvoice = '';
+  let dateFilterPayment = '';
+  const invoiceParams: any[] = [];
+  const paymentParams: any[] = [];
+
+  if (month && year) {
+    const startStr = `${year}-${String(month).padStart(2, '0')}-01T00:00:00.000Z`;
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? year + 1 : year;
+    const endStr = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00.000Z`;
+
+    dateFilterInvoice = ` AND (
+      (i.last_payment_date >= $1 AND i.last_payment_date < $2)
+      OR (i."1st_payment_date" >= $1 AND i."1st_payment_date" < $2)
+      OR (i.invoice_date >= $1 AND i.invoice_date < $2)
+      OR (i.created_at >= $1 AND i.created_at < $2)
+    )`;
+    invoiceParams.push(startStr, endStr);
+
+    dateFilterPayment = ` AND p.payment_date >= $1 AND p.payment_date < $2`;
+    paymentParams.push(startStr, endStr);
+  }
+
+  // 1. Fetch total verified payments from payment table
+  const paySql = `
+    SELECT 
+      COALESCE(SUM(p.amount::numeric), 0) as total_verified_payments,
+      COUNT(p.id) as payment_count
+    FROM payment p
+    WHERE p.verified_by IS NOT NULL
+      ${dateFilterPayment}
+  `;
+  const payRes = await executeQuery(paySql, paymentParams);
+  const totalVerifiedPayments = Number(payRes.rows[0]?.total_verified_payments) || 0;
+
+  // 2. Query invoices joined with package and product
+  const invSql = `
+    SELECT 
+      i.id as invoice_id,
+      i.invoice_number,
+      COALESCE(i.paid_amount::numeric, 0) as paid_amount,
+      COALESCE(i.total_amount::numeric, 0) as total_amount,
+      COALESCE(i.percent_of_total_amount::numeric, 0) as percent_of_total_amount,
+      i.paid,
+      i.status as invoice_status,
+      COALESCE(i.panel_qty::numeric, pkg.panel_qty::numeric, 0) as panel_qty,
+      COALESCE(i.panel_rating::numeric, 0) as inv_panel_rating,
+      i.linked_package,
+      pkg.bubble_id as pkg_bubble_id,
+      pkg.package_name as pkg_name,
+      prod.name as prod_name,
+      prod.selling_price as prod_price
+    FROM invoice i
+    LEFT JOIN package pkg ON (i.linked_package = pkg.bubble_id OR i.linked_package = pkg.id::text)
+    LEFT JOIN product prod ON (pkg.panel = prod.bubble_id OR pkg.panel = prod.id::text)
+    WHERE COALESCE(i.is_deleted, false) = false
+      AND (
+        COALESCE(i.paid_amount::numeric, 0) > 0 
+        OR i.paid = true 
+        OR COALESCE(i.percent_of_total_amount::numeric, 0) > 0
+      )
+      ${dateFilterInvoice}
+  `;
+
+  const invRes = await executeQuery(invSql, invoiceParams);
+
+  let totalCustomerRevenue = 0;
+  let totalContractValue = 0;
+  let paidInvoicesCountGtZero = 0;
+  let installedProjectsOver60Pct = 0;
+
+  let totalKwpAllPaid = 0;
+  let totalKwpOver60Pct = 0;
+
+  for (const row of invRes.rows) {
+    const paidAmount = Number(row.paid_amount) || 0;
+    const totalAmount = Number(row.total_amount) || 0;
+    let pct = Number(row.percent_of_total_amount) || 0;
+    if (pct === 0 && totalAmount > 0 && paidAmount > 0) {
+      pct = (paidAmount / totalAmount) * 100;
+    }
+
+    if (paidAmount > 0 || row.paid === true || pct > 0) {
+      paidInvoicesCountGtZero++;
+      totalCustomerRevenue += paidAmount;
+      totalContractValue += totalAmount;
+    }
+
+    const isInstalledOver60 = pct >= 59.9;
+    if (isInstalledOver60) {
+      installedProjectsOver60Pct++;
+    }
+
+    // Determine panel wattage rating (e.g. 550W, 580W, 600W)
+    let panelRating = Number(row.inv_panel_rating) || 0;
+    if (panelRating <= 0 && row.prod_name) {
+      const wattMatch = String(row.prod_name).match(/(\d{3})\s*w/i);
+      if (wattMatch) {
+        panelRating = Number(wattMatch[1]) || 0;
+      }
+    }
+    if (panelRating <= 0 && row.pkg_name) {
+      const wattMatch = String(row.pkg_name).match(/(\d{3})\s*w/i);
+      if (wattMatch) {
+        panelRating = Number(wattMatch[1]) || 0;
+      }
+    }
+
+    const qty = Number(row.panel_qty) || 0;
+    const rowKwp = (panelRating * qty) / 1000.0;
+
+    totalKwpAllPaid += rowKwp;
+    if (isInstalledOver60) {
+      totalKwpOver60Pct += rowKwp;
+    }
+  }
+
+  // Determine which metric set to surface as primary (support minPaidPct filter if provided)
+  const isFiltering60 = minPaidPct !== undefined ? minPaidPct >= 50 : false;
+  const primaryProjects = isFiltering60 ? installedProjectsOver60Pct : paidInvoicesCountGtZero;
+  const primaryKwp = isFiltering60 ? totalKwpOver60Pct : totalKwpAllPaid;
+  const primarySales = totalCustomerRevenue > 0 ? totalCustomerRevenue : totalVerifiedPayments;
+
+  const kwpRounded = Math.round(primaryKwp * 100) / 100;
+  const mwpRounded = Math.round((kwpRounded / 1000) * 100) / 100;
+
+  const result: PerformanceMetricsResult = {
+    total_sales: Math.round(primarySales * 100) / 100,
+    total_sales_formatted: `RM ${primarySales.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    total_projects: primaryProjects,
+    total_projects_description: isFiltering60 
+      ? 'Installed Projects (≥59.9% Paid)' 
+      : 'Total Projects with Payment (>0% Paid)',
+    total_kwp: kwpRounded,
+    total_kwp_formatted: `${kwpRounded.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kWp`,
+    total_mwp_formatted: `${mwpRounded.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MWp`,
+    formula: 'linked package solar panel rating * panel qty / 1000',
+    breakdown_details: {
+      customer_revenue_rm: Math.round(totalCustomerRevenue * 100) / 100,
+      total_verified_payments_rm: Math.round(totalVerifiedPayments * 100) / 100,
+      total_contract_value_rm: Math.round(totalContractValue * 100) / 100,
+      paid_invoices_count_gt_zero: paidInvoicesCountGtZero,
+      installed_projects_over_60_pct: installedProjectsOver60Pct,
+      kwp_for_paid_gt_zero: Math.round(totalKwpAllPaid * 100) / 100,
+      kwp_for_installed_over_60_pct: Math.round(totalKwpOver60Pct * 100) / 100,
+    },
+  };
+
+  if (month && year) {
+    result.period = {
+      month,
+      month_name: MONTH_NAMES[month - 1],
+      year,
+    };
+  }
+
+  return result;
+}
+

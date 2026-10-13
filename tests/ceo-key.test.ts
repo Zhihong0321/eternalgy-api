@@ -504,6 +504,66 @@ describe('CEO API Key (ceo2026) - Read Only Access Control', () => {
       querySpy.mockRestore();
     });
 
+    it('serves corporate performance metrics (total sales, projects, kwp) via /api/sales/metrics', async () => {
+      const mockPayRows = [{ total_verified_payments: 500000, payment_count: 50 }];
+      const mockInvRows = [
+        {
+          invoice_id: 1,
+          invoice_number: 'INV-001',
+          paid_amount: 30000,
+          total_amount: 30000,
+          percent_of_total_amount: 100,
+          paid: true,
+          panel_qty: 20,
+          inv_panel_rating: 550,
+          pkg_name: 'Standard 11kWp Package',
+          prod_name: 'Solar Panel 550W',
+        },
+        {
+          invoice_id: 2,
+          invoice_number: 'INV-002',
+          paid_amount: 15000,
+          total_amount: 25000,
+          percent_of_total_amount: 60,
+          paid: false,
+          panel_qty: 18,
+          inv_panel_rating: 580,
+          pkg_name: 'Solar Package',
+          prod_name: 'Solar Panel 580W',
+        },
+      ];
+
+      const querySpy = vi.spyOn(poolModule, 'executeQuery').mockImplementation(async (sql: string) => {
+        if (sql.includes('payment')) {
+          return { rows: mockPayRows } as any;
+        }
+        return { rows: mockInvRows } as any;
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/sales/metrics?key=ceo2026',
+      });
+      expect(res.statusCode).toBe(200);
+      const json = res.json();
+      expect(json.success).toBe(true);
+      expect(json.total_projects).toBe(2);
+      expect(json.total_sales).toBe(45000);
+      // kWp = (20 * 550 / 1000) + (18 * 580 / 1000) = 11.0 + 10.44 = 21.44 kWp
+      expect(json.total_kwp).toBe(21.44);
+      expect(json.formula).toContain('linked package solar panel rating * panel qty / 1000');
+
+      // Test format=summary
+      const resSum = await app.inject({
+        method: 'GET',
+        url: '/api/sales/metrics?key=ceo2026&format=summary',
+      });
+      expect(resSum.statusCode).toBe(200);
+      expect(resSum.body).toContain('Corporate Performance Metrics');
+
+      querySpy.mockRestore();
+    });
+
     it('rejects unauthenticated requests with 401', async () => {
       const res = await app.inject({
         method: 'GET',
