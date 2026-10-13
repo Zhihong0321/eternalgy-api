@@ -18,72 +18,59 @@ interface QueryFilterString {
   [key: string]: string | undefined;
 }
 
+function extractFilters(rawQuery: Record<string, any>) {
+  const {
+    limit,
+    offset,
+    sort,
+    order,
+    key,
+    apiKey,
+    api_key,
+    'x-api-key': _xApiKey,
+    secret,
+    adminSecret,
+    'x-admin-secret': _xAdminSecret,
+    password,
+    pass,
+    ...filters
+  } = rawQuery;
+
+  return {
+    limit,
+    offset,
+    sort,
+    order,
+    filters,
+  };
+}
+
 export async function dataRoutes(app: FastifyInstance) {
-  // Enforce API key authentication for all /v1/data routes
+  // Enforce API key authentication for all /v1/data and /api/data routes
   app.addHook('preHandler', authenticateApiKey);
 
-  /**
-   * GET /v1/data/:table - List records with filtering, pagination, and column masking
-   */
-  app.get<{ Params: TableParams; Querystring: QueryFilterString }>(
-    '/v1/data/:table',
-    async (request, reply) => {
-      const { table } = request.params;
-      const { limit, offset, sort, order, ...rawFilters } = request.query;
+  const listHandler = async (
+    request: FastifyRequest<{ Params: TableParams; Querystring: QueryFilterString }>,
+    reply: FastifyReply
+  ) => {
+    const { table } = request.params;
+    const { limit, offset, sort, order, filters } = extractFilters((request.query || {}) as any);
 
-      const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
+    const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
 
-      // Master admin bypass
-      if (request.isAdmin) {
-        if (GLOBALLY_BLOCKED_TABLES.has(targetTable) && targetTable !== 'user' && targetTable !== 'users') {
-          return reply.status(403).send({
-            statusCode: 403,
-            error: 'Forbidden',
-            message: `Table '${table}' is a protected system table.`,
-          });
-        }
-
-        const query = QueryBuilder.buildSelect({
-          table: targetTable,
-          filter: rawFilters,
-          limit: limit ? Number(limit) : undefined,
-          offset: offset ? Number(offset) : undefined,
-          sort,
-          order: order?.toUpperCase() as any,
-        });
-
-        const result = await executeQuery(query.text, query.params);
-        return reply.send({
-          data: result.rows,
-          count: result.rows.length,
-          limit: Number(limit) || 20,
-          offset: Number(offset) || 0,
-        });
-      }
-
-      // Governed client check
-      const auth = PolicyEngine.authorize(
-        request.apiKeyRecord!,
-        table,
-        'read',
-        request.authContext!
-      );
-
-      if (!auth.allowed) {
+    // Master admin bypass
+    if (request.isAdmin) {
+      if (GLOBALLY_BLOCKED_TABLES.has(targetTable) && targetTable !== 'user' && targetTable !== 'users') {
         return reply.status(403).send({
           statusCode: 403,
           error: 'Forbidden',
-          message: auth.reason,
+          message: `Table '${table}' is a protected system table.`,
         });
       }
 
-      const queryTable = auth.resolvedTableName || targetTable;
-
       const query = QueryBuilder.buildSelect({
-        table: queryTable,
-        allowedColumns: auth.tablePolicy?.allowedColumns,
-        filter: rawFilters,
-        rowScopeConstraint: auth.rowScopeConstraint,
+        table: targetTable,
+        filter: filters,
         limit: limit ? Number(limit) : undefined,
         offset: offset ? Number(offset) : undefined,
         sort,
@@ -91,253 +78,286 @@ export async function dataRoutes(app: FastifyInstance) {
       });
 
       const result = await executeQuery(query.text, query.params);
-      const maskedRows = result.rows.map((row) =>
-        PolicyEngine.maskRow(auth.tablePolicy!, row)
-      );
-
       return reply.send({
-        data: maskedRows,
-        count: maskedRows.length,
+        data: result.rows,
+        count: result.rows.length,
         limit: Number(limit) || 20,
         offset: Number(offset) || 0,
       });
     }
-  );
 
-  /**
-   * GET /v1/data/:table/:id - Retrieve single record
-   */
-  app.get<{ Params: TableParams }>(
-    '/v1/data/:table/:id',
-    async (request, reply) => {
-      const { table, id } = request.params;
-      const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
+    // Governed client check
+    const auth = PolicyEngine.authorize(
+      request.apiKeyRecord!,
+      table,
+      'read',
+      request.authContext!
+    );
 
-      if (!id) {
-        return reply.status(400).send({ statusCode: 400, message: 'Missing record id' });
-      }
+    if (!auth.allowed) {
+      return reply.status(403).send({
+        statusCode: 403,
+        error: 'Forbidden',
+        message: auth.reason,
+      });
+    }
 
-      if (request.isAdmin) {
-        const query = QueryBuilder.buildSelect({
-          table: targetTable,
-          filter: { id },
-          limit: 1,
-        });
-        const result = await executeQuery(query.text, query.params);
-        if (result.rows.length === 0) {
-          return reply.status(404).send({ statusCode: 404, message: 'Record not found' });
-        }
-        return reply.send({ data: result.rows[0] });
-      }
+    const queryTable = auth.resolvedTableName || targetTable;
 
-      const auth = PolicyEngine.authorize(
-        request.apiKeyRecord!,
-        table,
-        'read',
-        request.authContext!
-      );
+    const query = QueryBuilder.buildSelect({
+      table: queryTable,
+      allowedColumns: auth.tablePolicy?.allowedColumns,
+      filter: filters,
+      rowScopeConstraint: auth.rowScopeConstraint,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+      sort,
+      order: order?.toUpperCase() as any,
+    });
 
-      if (!auth.allowed) {
-        return reply.status(403).send({
-          statusCode: 403,
-          error: 'Forbidden',
-          message: auth.reason,
-        });
-      }
+    const result = await executeQuery(query.text, query.params);
+    const maskedRows = result.rows.map((row) =>
+      PolicyEngine.maskRow(auth.tablePolicy!, row)
+    );
 
-      const queryTable = auth.resolvedTableName || targetTable;
+    return reply.send({
+      data: maskedRows,
+      count: maskedRows.length,
+      limit: Number(limit) || 20,
+      offset: Number(offset) || 0,
+    });
+  };
+
+  const getByIdHandler = async (
+    request: FastifyRequest<{ Params: TableParams }>,
+    reply: FastifyReply
+  ) => {
+    const { table, id } = request.params;
+    const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
+
+    if (!id) {
+      return reply.status(400).send({ statusCode: 400, message: 'Missing record id' });
+    }
+
+    if (request.isAdmin) {
       const query = QueryBuilder.buildSelect({
-        table: queryTable,
-        allowedColumns: auth.tablePolicy?.allowedColumns,
+        table: targetTable,
         filter: { id },
-        rowScopeConstraint: auth.rowScopeConstraint,
         limit: 1,
       });
-
       const result = await executeQuery(query.text, query.params);
       if (result.rows.length === 0) {
-        return reply.status(404).send({
-          statusCode: 404,
-          message: `Record with id '${id}' not found in table '${table}'.`,
-        });
+        return reply.status(404).send({ statusCode: 404, message: 'Record not found' });
       }
-
-      const masked = PolicyEngine.maskRow(auth.tablePolicy!, result.rows[0]);
-      return reply.send({ data: masked });
+      return reply.send({ data: result.rows[0] });
     }
-  );
 
-  /**
-   * POST /v1/data/:table - Insert new record with strict schema validation
-   */
-  app.post<{ Params: TableParams; Body: Record<string, any> }>(
-    '/v1/data/:table',
-    async (request, reply) => {
-      const { table } = request.params;
-      const payload = request.body;
-      const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
+    const auth = PolicyEngine.authorize(
+      request.apiKeyRecord!,
+      table,
+      'read',
+      request.authContext!
+    );
 
-      if (request.isAdmin) {
-        const query = QueryBuilder.buildInsert(targetTable, payload);
-        const result = await executeQuery(query.text, query.params);
-        return reply.status(201).send({ data: result.rows[0] });
-      }
+    if (!auth.allowed) {
+      return reply.status(403).send({
+        statusCode: 403,
+        error: 'Forbidden',
+        message: auth.reason,
+      });
+    }
 
-      const auth = PolicyEngine.authorize(
-        request.apiKeyRecord!,
-        table,
-        'create',
-        request.authContext!
-      );
+    const queryTable = auth.resolvedTableName || targetTable;
+    const query = QueryBuilder.buildSelect({
+      table: queryTable,
+      allowedColumns: auth.tablePolicy?.allowedColumns,
+      filter: { id },
+      rowScopeConstraint: auth.rowScopeConstraint,
+      limit: 1,
+    });
 
-      if (!auth.allowed) {
-        return reply.status(403).send({
-          statusCode: 403,
-          error: 'Forbidden',
-          message: auth.reason,
-        });
-      }
+    const result = await executeQuery(query.text, query.params);
+    if (result.rows.length === 0) {
+      return reply.status(404).send({
+        statusCode: 404,
+        message: `Record with id '${id}' not found in table '${table}'.`,
+      });
+    }
 
-      const validation = PolicyEngine.validatePayload(auth.tablePolicy!, payload);
-      if (!validation.valid) {
-        return reply.status(400).send({
-          statusCode: 400,
-          error: 'Bad Request',
-          message: validation.error,
-        });
-      }
+    const masked = PolicyEngine.maskRow(auth.tablePolicy!, result.rows[0]);
+    return reply.send({ data: masked });
+  };
 
-      const queryTable = auth.resolvedTableName || targetTable;
-      const query = QueryBuilder.buildInsert(
-        queryTable,
-        validation.sanitized!,
-        auth.rowScopeConstraint
-      );
+  const createHandler = async (
+    request: FastifyRequest<{ Params: TableParams; Body: Record<string, any> }>,
+    reply: FastifyReply
+  ) => {
+    const { table } = request.params;
+    const payload = request.body;
+    const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
 
+    if (request.isAdmin) {
+      const query = QueryBuilder.buildInsert(targetTable, payload);
       const result = await executeQuery(query.text, query.params);
-      const masked = PolicyEngine.maskRow(auth.tablePolicy!, result.rows[0]);
-
-      return reply.status(201).send({ data: masked });
+      return reply.status(201).send({ data: result.rows[0] });
     }
-  );
 
-  /**
-   * PATCH /v1/data/:table/:id - Update existing record with strict field filtering
-   */
-  app.patch<{ Params: TableParams; Body: Record<string, any> }>(
-    '/v1/data/:table/:id',
-    async (request, reply) => {
-      const { table, id } = request.params;
-      const payload = request.body;
-      const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
+    const auth = PolicyEngine.authorize(
+      request.apiKeyRecord!,
+      table,
+      'create',
+      request.authContext!
+    );
 
-      if (!id) {
-        return reply.status(400).send({ statusCode: 400, message: 'Missing record id' });
-      }
+    if (!auth.allowed) {
+      return reply.status(403).send({
+        statusCode: 403,
+        error: 'Forbidden',
+        message: auth.reason,
+      });
+    }
 
-      if (request.isAdmin) {
-        const query = QueryBuilder.buildUpdate(targetTable, id, payload);
-        const result = await executeQuery(query.text, query.params);
-        if (result.rows.length === 0) {
-          return reply.status(404).send({ statusCode: 404, message: 'Record not found' });
-        }
-        return reply.send({ data: result.rows[0] });
-      }
+    const validation = PolicyEngine.validatePayload(auth.tablePolicy!, payload);
+    if (!validation.valid) {
+      return reply.status(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: validation.error,
+      });
+    }
 
-      const auth = PolicyEngine.authorize(
-        request.apiKeyRecord!,
-        table,
-        'update',
-        request.authContext!
-      );
+    const queryTable = auth.resolvedTableName || targetTable;
+    const query = QueryBuilder.buildInsert(
+      queryTable,
+      validation.sanitized!,
+      auth.rowScopeConstraint
+    );
 
-      if (!auth.allowed) {
-        return reply.status(403).send({
-          statusCode: 403,
-          error: 'Forbidden',
-          message: auth.reason,
-        });
-      }
+    const result = await executeQuery(query.text, query.params);
+    const masked = PolicyEngine.maskRow(auth.tablePolicy!, result.rows[0]);
 
-      const validation = PolicyEngine.validatePayload(auth.tablePolicy!, payload);
-      if (!validation.valid) {
-        return reply.status(400).send({
-          statusCode: 400,
-          error: 'Bad Request',
-          message: validation.error,
-        });
-      }
+    return reply.status(201).send({ data: masked });
+  };
 
-      const queryTable = auth.resolvedTableName || targetTable;
-      const query = QueryBuilder.buildUpdate(
-        queryTable,
-        id,
-        validation.sanitized!,
-        auth.rowScopeConstraint
-      );
+  const updateHandler = async (
+    request: FastifyRequest<{ Params: TableParams; Body: Record<string, any> }>,
+    reply: FastifyReply
+  ) => {
+    const { table, id } = request.params;
+    const payload = request.body;
+    const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
 
+    if (!id) {
+      return reply.status(400).send({ statusCode: 400, message: 'Missing record id' });
+    }
+
+    if (request.isAdmin) {
+      const query = QueryBuilder.buildUpdate(targetTable, id, payload);
       const result = await executeQuery(query.text, query.params);
       if (result.rows.length === 0) {
-        return reply.status(404).send({
-          statusCode: 404,
-          message: `Record with id '${id}' not found or access denied.`,
-        });
+        return reply.status(404).send({ statusCode: 404, message: 'Record not found' });
       }
-
-      const masked = PolicyEngine.maskRow(auth.tablePolicy!, result.rows[0]);
-      return reply.send({ data: masked });
+      return reply.send({ data: result.rows[0] });
     }
-  );
 
-  /**
-   * DELETE /v1/data/:table/:id - Delete record (if role permitted)
-   */
-  app.delete<{ Params: TableParams }>(
-    '/v1/data/:table/:id',
-    async (request, reply) => {
-      const { table, id } = request.params;
-      const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
+    const auth = PolicyEngine.authorize(
+      request.apiKeyRecord!,
+      table,
+      'update',
+      request.authContext!
+    );
 
-      if (!id) {
-        return reply.status(400).send({ statusCode: 400, message: 'Missing record id' });
-      }
+    if (!auth.allowed) {
+      return reply.status(403).send({
+        statusCode: 403,
+        error: 'Forbidden',
+        message: auth.reason,
+      });
+    }
 
-      if (request.isAdmin) {
-        const query = QueryBuilder.buildDelete(targetTable, id);
-        const result = await executeQuery(query.text, query.params);
-        if (result.rows.length === 0) {
-          return reply.status(404).send({ statusCode: 404, message: 'Record not found' });
-        }
-        return reply.send({ deleted: true, id });
-      }
+    const validation = PolicyEngine.validatePayload(auth.tablePolicy!, payload);
+    if (!validation.valid) {
+      return reply.status(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: validation.error,
+      });
+    }
 
-      const auth = PolicyEngine.authorize(
-        request.apiKeyRecord!,
-        table,
-        'delete',
-        request.authContext!
-      );
+    const queryTable = auth.resolvedTableName || targetTable;
+    const query = QueryBuilder.buildUpdate(
+      queryTable,
+      id,
+      validation.sanitized!,
+      auth.rowScopeConstraint
+    );
 
-      if (!auth.allowed) {
-        return reply.status(403).send({
-          statusCode: 403,
-          error: 'Forbidden',
-          message: auth.reason,
-        });
-      }
+    const result = await executeQuery(query.text, query.params);
+    if (result.rows.length === 0) {
+      return reply.status(404).send({
+        statusCode: 404,
+        message: `Record with id '${id}' not found or access denied.`,
+      });
+    }
 
-      const queryTable = auth.resolvedTableName || targetTable;
-      const query = QueryBuilder.buildDelete(queryTable, id, auth.rowScopeConstraint);
+    const masked = PolicyEngine.maskRow(auth.tablePolicy!, result.rows[0]);
+    return reply.send({ data: masked });
+  };
+
+  const deleteHandler = async (
+    request: FastifyRequest<{ Params: TableParams }>,
+    reply: FastifyReply
+  ) => {
+    const { table, id } = request.params;
+    const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
+
+    if (!id) {
+      return reply.status(400).send({ statusCode: 400, message: 'Missing record id' });
+    }
+
+    if (request.isAdmin) {
+      const query = QueryBuilder.buildDelete(targetTable, id);
       const result = await executeQuery(query.text, query.params);
-
       if (result.rows.length === 0) {
-        return reply.status(404).send({
-          statusCode: 404,
-          message: `Record with id '${id}' not found or access denied.`,
-        });
+        return reply.status(404).send({ statusCode: 404, message: 'Record not found' });
       }
-
       return reply.send({ deleted: true, id });
     }
-  );
+
+    const auth = PolicyEngine.authorize(
+      request.apiKeyRecord!,
+      table,
+      'delete',
+      request.authContext!
+    );
+
+    if (!auth.allowed) {
+      return reply.status(403).send({
+        statusCode: 403,
+        error: 'Forbidden',
+        message: auth.reason,
+      });
+    }
+
+    const queryTable = auth.resolvedTableName || targetTable;
+    const query = QueryBuilder.buildDelete(queryTable, id, auth.rowScopeConstraint);
+    const result = await executeQuery(query.text, query.params);
+
+    if (result.rows.length === 0) {
+      return reply.status(404).send({
+        statusCode: 404,
+        message: `Record with id '${id}' not found or access denied.`,
+      });
+    }
+
+    return reply.send({ deleted: true, id });
+  };
+
+  for (const prefix of ['/v1/data', '/api/data']) {
+    app.get<{ Params: TableParams; Querystring: QueryFilterString }>(`${prefix}/:table`, listHandler);
+    app.get<{ Params: TableParams }>(`${prefix}/:table/:id`, getByIdHandler);
+    app.post<{ Params: TableParams; Body: Record<string, any> }>(`${prefix}/:table`, createHandler);
+    app.patch<{ Params: TableParams; Body: Record<string, any> }>(`${prefix}/:table/:id`, updateHandler);
+    app.delete<{ Params: TableParams }>(`${prefix}/:table/:id`, deleteHandler);
+  }
 }

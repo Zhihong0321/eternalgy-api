@@ -191,6 +191,22 @@ describe('CEO API Key (ceo2026) - Read Only Access Control', () => {
       });
       expect(resSpell.statusCode).toBe(200);
 
+      // 8. GET /v1/data/invoice with ?key=ceo2026 query param (ensuring key param is not filtered as column)
+      const resQueryKey = await app.inject({
+        method: 'GET',
+        url: '/v1/data/invoice?key=ceo2026',
+      });
+      expect(resQueryKey.statusCode).toBe(200);
+      expect(resQueryKey.json().data).toHaveLength(1);
+
+      // 9. GET /api/data/invoice alias with ?key=ceo2026
+      const resApiAlias = await app.inject({
+        method: 'GET',
+        url: '/api/data/invoice?key=ceo2026',
+      });
+      expect(resApiAlias.statusCode).toBe(200);
+      expect(resApiAlias.json().data).toHaveLength(1);
+
       querySpy.mockRestore();
     });
 
