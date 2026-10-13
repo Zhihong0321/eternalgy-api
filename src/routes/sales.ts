@@ -679,6 +679,7 @@ export async function salesRoutes(app: FastifyInstance) {
     app.get(`${prefix}/all/metrics`, metricsHandler);
     app.get(`${prefix}/summary`, metricsHandler);
     app.get(`${prefix}/corporate-metrics`, metricsHandler);
+    app.get(`${prefix}/kwp`, metricsHandler);
     app.get(
       `${prefix}/october/metrics`,
       async (request: any, reply) => {
@@ -699,6 +700,7 @@ export interface PerformanceMetricsResult {
   };
   total_sales: number;
   total_sales_formatted: string;
+  total_project: number;
   total_projects: number;
   total_projects_description: string;
   total_kwp: number;
@@ -852,6 +854,7 @@ export async function fetchPerformanceMetrics(options: {
   const result: PerformanceMetricsResult = {
     total_sales: Math.round(primarySales * 100) / 100,
     total_sales_formatted: `RM ${primarySales.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    total_project: primaryProjects,
     total_projects: primaryProjects,
     total_projects_description: isFiltering60 
       ? 'Installed Projects (≥59.9% Paid)' 
