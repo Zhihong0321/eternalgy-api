@@ -19,6 +19,19 @@ function mapPgTypeToJsonSchema(pgType: string): { type: string; format?: string 
   return { type: 'string' };
 }
 
+function resolveHost(req: any): string {
+  const forwardedProto = req.headers?.['x-forwarded-proto'];
+  const proto = forwardedProto
+    ? String(forwardedProto).split(',')[0].trim()
+    : req.headers?.host?.includes('railway.app')
+    ? 'https'
+    : req.protocol === 'https'
+    ? 'https'
+    : 'https';
+  const hostName = req.headers?.['x-forwarded-host'] || req.headers?.host || 'e-api.up.railway.app';
+  return `${proto}://${hostName}`;
+}
+
 export function buildAiAgentPrompt(params: {
   key: ApiKeyRecord;
   keyToUse: string;
@@ -28,11 +41,25 @@ export function buildAiAgentPrompt(params: {
   proxyList: any[];
 }): string {
   const { key, keyToUse, host, tableSchemas, relationships, proxyList } = params;
+  const isCeo = key.role === 'ceo';
+  const isATS = Boolean(proxyList.some((p) => p.id === 'calculator'));
 
   let out = `# 🤖 AI Coding Agent System Prompt & Schema Specification
 # Eternalgy Central API Gateway
 
-> ⚠️ **MANDATORY INSTRUCTION FOR AI AGENTS (CRITICAL):**
+`;
+
+  if (isCeo) {
+    out += `> 👔 **EXECUTIVE ACCESS (ROLE: CEO - READ ONLY)**:
+> This API key (\`${keyToUse}\`) provides high-level executive read-only visibility into sales performance, monthly rankings, invoices, and payments.
+> - **Permitted Actions**: Read-only queries on \`invoice\`, \`user\`, \`payment\`, and \`submitted_payment\`.
+> - **Security Restrictions**: Write operations (\`POST\`, \`PATCH\`, \`DELETE\`) and other tables are forbidden (\`403 Forbidden\`).
+> - **Dedicated Analytics Endpoints**: Pre-aggregated monthly sales leaderboards and detailed invoice/payment breakdown endpoints are provided below.
+
+---
+`;
+  } else if (isATS) {
+    out += `> ⚠️ **MANDATORY INSTRUCTION FOR AI AGENTS (CRITICAL):**
 > Before executing any queries or creating project files, **remind and instruct the user**:
 > 1. **Start in a new dedicated workspace directory**:
 >    \`\`\`bash
@@ -43,18 +70,19 @@ export function buildAiAgentPrompt(params: {
 > 3. Keep all scripts, environment keys (\`.env\`), and tests contained within this folder.
 
 ---
+`;
+  }
 
-## 🔑 1. Gateway Authentication & Architecture
+  out += `## 🔑 1. Gateway Authentication & Architecture
 
 - **Gateway Base URL**: \`${host}\`
 - **Authorized API Key**: \`${keyToUse}\`
 - **Client Name / Role**: \`${key.name}\` (\`${key.role || 'custom'}\`)
 - **Rate Limit**: \`${key.rateLimitRpm} requests/minute\`
-- **Authentication Header**:
-  \`\`\`http
-  x-api-key: ${keyToUse}
-  \`\`\`
-*(Bearer token is also supported: \`Authorization: Bearer ${keyToUse}\`)*
+- **Authentication Options**:
+  1. Query Parameter: \`?key=${keyToUse}\` (Recommended for browser links and simple requests)
+  2. HTTP Header: \`x-api-key: ${keyToUse}\`
+  3. Bearer Token: \`Authorization: Bearer ${keyToUse}\`
 
 ### 🛡️ Credential Cloaking & Reverse Proxy
 This gateway is your central access point. You **do not need raw database passwords or 3rd-party vendor keys**.
@@ -64,8 +92,51 @@ The gateway automatically:
 - Enforces column masking and row guardrails.
 
 ---
+`;
 
-## 🗄️ 2. PostgreSQL Tables & Data Schemas
+  if (isCeo || key.tables.payment) {
+    out += `## 📊 2. Executive Sales Analytics & Leaderboard Endpoints
+
+The gateway provides fast, pre-aggregated endpoints calculated directly from verified transactions in PostgreSQL.
+
+### 🏆 A. Monthly Sales Leaderboard
+- **October 2026 Shortcut**: \`GET ${host}/api/sales/october?key=${keyToUse}\`
+- **Any Month / Year**: \`GET ${host}/api/sales/leaderboard?year=2026&month=10&key=${keyToUse}\`
+- **Supported Query Formats**:
+  - \`format=json\` (Default): Complete JSON ranking, total sales, invoices count, payments count.
+  - \`format=csv\`: Flattened CSV file ready to download or import into Excel / Google Sheets.
+  - \`format=summary\`: One-sentence text summary.
+
+### 📋 B. Sales Agent, Invoices & Payments Detailed Breakdown
+- **October 2026 Breakdown**: \`GET ${host}/api/sales/october/breakdown?key=${keyToUse}\`
+- **Any Month / Year Breakdown**: \`GET ${host}/api/sales/breakdown?year=2026&month=10&key=${keyToUse}\`
+- **Filter by Specific Agent**: \`GET ${host}/api/sales/breakdown?year=2026&month=10&agent=Ng%20Zhan%20Yi&key=${keyToUse}\`
+- **Excel / CSV Download**: \`GET ${host}/api/sales/october/breakdown?key=${keyToUse}&format=csv\`
+- **Data Hierarchy**:
+  \`\`\`json
+  {
+    "salesperson_name": "Ng Zhan Yi",
+    "total_verified_sales": 105049.50,
+    "invoices": [
+      {
+        "invoice_number": "INV-1010002",
+        "invoice_total_amount": 32734.95,
+        "customer_name": "cust_1a70208b",
+        "total_paid_in_period": 20902.70,
+        "payments": [
+          { "payment_id": 105475, "amount": 1818.20, "payment_date": "2026-10-01", "payment_method": "CASH" },
+          { "payment_id": 105491, "amount": 19084.50, "payment_date": "2026-10-01", "payment_method": "EPP" }
+        ]
+      }
+    ]
+  }
+  \`\`\`
+
+---
+`;
+  }
+
+  out += `## 🗄️ 3. PostgreSQL Tables & Data Schemas
 
 `;
 
@@ -74,12 +145,20 @@ The gateway automatically:
     out += `### Table: \`${t.table}\`
 - **Permitted Actions**: ${t.actions.map((a: string) => `\`${a.toUpperCase()}\``).join(', ')}
 - **Endpoints**:
-  - \`GET ${host}/v1/data/${t.table}?limit=10&offset=0\` (Query & filter)
-  - \`GET ${host}/v1/data/${t.table}/{id}\` (Get single record)
-  - \`POST ${host}/v1/data/${t.table}\` (Create new record)
-  - \`PATCH ${host}/v1/data/${t.table}/{id}\` (Update record)
-  - \`DELETE ${host}/v1/data/${t.table}/{id}\` (Delete record)
+  - \`GET ${host}/v1/data/${t.table}?key=${keyToUse}&limit=10&offset=0\` (Query & filter)
+  - \`GET ${host}/v1/data/${t.table}/{id}?key=${keyToUse}\` (Get single record)
+`;
+    if (t.actions.includes('create')) {
+      out += `  - \`POST ${host}/v1/data/${t.table}\` (Create new record)\n`;
+    }
+    if (t.actions.includes('update')) {
+      out += `  - \`PATCH ${host}/v1/data/${t.table}/{id}\` (Update record)\n`;
+    }
+    if (t.actions.includes('delete')) {
+      out += `  - \`DELETE ${host}/v1/data/${t.table}/{id}\` (Delete record)\n`;
+    }
 
+    out += `
 - **Columns (${readableCols.length})**:
 | Column Name | PostgreSQL Type | Nullable | Primary Key |
 | :--- | :--- | :--- | :--- |
@@ -90,7 +169,7 @@ ${readableCols.map((c: any) => `| \`${c.name}\` | \`${c.dataType}\` | ${c.isNull
 
   out += `---
 
-## 🔗 3. Database Entity Relationships & Foreign Keys
+## 🔗 4. Database Entity Relationships & Foreign Keys
 
 `;
 
@@ -108,7 +187,7 @@ ${readableCols.map((c: any) => `| \`${c.name}\` | \`${c.dataType}\` | ${c.isNull
   if (proxyList.length > 0) {
     out += `\n---
 
-## 🌐 4. 3rd-Party APIs (ATAP Solar Calculator & ATS Add-on)
+## 🌐 5. 3rd-Party APIs
 
 `;
     for (const p of proxyList) {
@@ -124,34 +203,69 @@ ${readableCols.map((c: any) => `| \`${c.name}\` | \`${c.dataType}\` | ${c.isNull
 
   out += `\n---
 
-## 💻 5. Quickstart Code Snippets
+## 💻 6. Quickstart Code Snippets
 
-### cURL
+`;
+
+  if (isCeo) {
+    out += `### cURL
 \`\`\`bash
-# 1. Update ATS Add-on Price
-curl -X PUT "${host}/v1/settings/ats-addon-price" \\
-  -H "Content-Type: application/json" \\
-  -H "x-api-key: ${keyToUse}" \\
-  -d '{"price": 2000}'
+# 1. Fetch October Sales Leaderboard
+curl -s "${host}/api/sales/october?key=${keyToUse}"
 
-# 2. Query Products from PostgreSQL
-curl -X GET "${host}/v1/data/product?limit=5" \\
+# 2. Fetch Agent, Invoices & Payments Detailed Breakdown
+curl -s "${host}/api/sales/october/breakdown?key=${keyToUse}"
+
+# 3. Download CSV for Excel / Google Sheets
+curl -s "${host}/api/sales/october/breakdown?key=${keyToUse}&format=csv" -o october_sales.csv
+
+# 4. Query Invoices Table directly (Read Only)
+curl -s "${host}/v1/data/invoice?key=${keyToUse}&limit=5"
+
+# 5. Query Payments Table directly (Read Only)
+curl -s "${host}/v1/data/payment?key=${keyToUse}&limit=5"
+\`\`\`
+
+### Python
+\`\`\`python
+import requests
+
+BASE_URL = "${host}"
+API_KEY = "${keyToUse}"
+
+# Fetch October sales breakdown
+res = requests.get(f"{BASE_URL}/api/sales/october/breakdown", params={"key": API_KEY})
+data = res.json()
+
+print(f"Total Verified Sales: RM {data['summary']['total_sales']:,.2f}")
+for agent in data['breakdown']:
+    print(f"Rank {agent['rank']}: {agent['salesperson_name']} - RM {agent['total_verified_sales']:,.2f} ({agent['invoices_count']} invoices)")
+\`\`\`
+
+### Node.js (fetch)
+\`\`\`javascript
+const res = await fetch("${host}/api/sales/october/breakdown?key=${keyToUse}");
+const data = await res.json();
+console.log("October Sales Summary:", data.summary);
+\`\`\`
+`;
+  } else {
+    out += `### cURL
+\`\`\`bash
+# 1. Query table records
+curl -X GET "${host}/v1/data/${tableSchemas[0]?.table || 'payment'}?limit=5" \\
   -H "x-api-key: ${keyToUse}"
 \`\`\`
 
 ### Node.js (fetch)
 \`\`\`javascript
-const res = await fetch("${host}/v1/settings/ats-addon-price", {
-  method: "PUT",
-  headers: {
-    "Content-Type": "application/json",
-    "x-api-key": "${keyToUse}",
-  },
-  body: JSON.stringify({ price: 2000 }),
+const res = await fetch("${host}/v1/data/${tableSchemas[0]?.table || 'payment'}?limit=5", {
+  headers: { "x-api-key: ${keyToUse}" }
 });
 console.log(await res.json());
 \`\`\`
 `;
+  }
 
   return out;
 }
@@ -375,7 +489,7 @@ export async function keyDocsRoutes(app: FastifyInstance) {
    */
   app.get<{ Params: { keyId: string } }>('/docs/keys/:keyId', async (request, reply) => {
     const auth = await resolveKey(request);
-    const host = `${request.protocol}://${request.headers.host || 'e-api.up.railway.app'}`;
+    const host = resolveHost(request);
     const rawSecret =
       (request.query as any)?.secret ||
       (request.query as any)?.key ||
@@ -428,7 +542,7 @@ export async function keyDocsRoutes(app: FastifyInstance) {
       return reply.status(401).send({ statusCode: 401, error: 'Unauthorized', message: auth.error });
     }
 
-    const host = `${request.protocol}://${request.headers.host || 'e-api.up.railway.app'}`;
+    const host = resolveHost(request);
     const rawSecret =
       (request.query as any)?.secret ||
       (request.query as any)?.key ||
@@ -679,7 +793,7 @@ export async function keyDocsRoutes(app: FastifyInstance) {
       return reply.status(401).type('text/plain; charset=utf-8').send(`Error 401 Unauthorized: ${auth.error}`);
     }
 
-    const host = `${request.protocol}://${request.headers.host || 'e-api.up.railway.app'}`;
+    const host = resolveHost(request);
     const rawSecret =
       (request.query as any)?.secret ||
       (request.query as any)?.key ||
@@ -702,7 +816,7 @@ export async function keyDocsRoutes(app: FastifyInstance) {
       });
     }
 
-    const host = `${request.protocol}://${request.headers.host || 'e-api.up.railway.app'}`;
+    const host = resolveHost(request);
     const rawSecret =
       (request.query as any)?.secret ||
       (request.query as any)?.key ||

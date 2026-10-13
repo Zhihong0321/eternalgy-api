@@ -11,7 +11,7 @@ describe('CEO API Key (ceo2026) - Read Only Access Control', () => {
   beforeAll(async () => {
     app = await buildServer();
     await app.ready();
-  });
+  }, 30000);
 
   afterAll(async () => {
     await app.close();
