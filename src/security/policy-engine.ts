@@ -80,6 +80,10 @@ export class PolicyEngine {
       }
     }
 
+    if (resolvedTableName === 'submited_payment') {
+      resolvedTableName = 'submitted_payment';
+    }
+
     if (!tablePolicy) {
       return {
         allowed: false,

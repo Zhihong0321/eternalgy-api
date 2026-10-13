@@ -45,6 +45,14 @@ function extractFilters(rawQuery: Record<string, any>) {
   };
 }
 
+function normalizeTableName(table: string): string {
+  let target = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
+  if (target === 'submited_payment') {
+    target = 'submitted_payment';
+  }
+  return target;
+}
+
 export async function dataRoutes(app: FastifyInstance) {
   // Enforce API key authentication for all /v1/data and /api/data routes
   app.addHook('preHandler', authenticateApiKey);
@@ -56,7 +64,7 @@ export async function dataRoutes(app: FastifyInstance) {
     const { table } = request.params;
     const { limit, offset, sort, order, filters } = extractFilters((request.query || {}) as any);
 
-    const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
+    const targetTable = normalizeTableName(table);
 
     // Master admin bypass
     if (request.isAdmin) {
@@ -133,7 +141,7 @@ export async function dataRoutes(app: FastifyInstance) {
     reply: FastifyReply
   ) => {
     const { table, id } = request.params;
-    const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
+    const targetTable = normalizeTableName(table);
 
     if (!id) {
       return reply.status(400).send({ statusCode: 400, message: 'Missing record id' });
@@ -194,7 +202,7 @@ export async function dataRoutes(app: FastifyInstance) {
   ) => {
     const { table } = request.params;
     const payload = request.body;
-    const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
+    const targetTable = normalizeTableName(table);
 
     if (request.isAdmin) {
       const query = QueryBuilder.buildInsert(targetTable, payload);
@@ -245,7 +253,7 @@ export async function dataRoutes(app: FastifyInstance) {
   ) => {
     const { table, id } = request.params;
     const payload = request.body;
-    const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
+    const targetTable = normalizeTableName(table);
 
     if (!id) {
       return reply.status(400).send({ statusCode: 400, message: 'Missing record id' });
@@ -309,7 +317,7 @@ export async function dataRoutes(app: FastifyInstance) {
     reply: FastifyReply
   ) => {
     const { table, id } = request.params;
-    const targetTable = (table || '').trim().replace(/[\s-]+/g, '_').toLowerCase();
+    const targetTable = normalizeTableName(table);
 
     if (!id) {
       return reply.status(400).send({ statusCode: 400, message: 'Missing record id' });
