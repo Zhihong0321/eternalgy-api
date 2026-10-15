@@ -141,14 +141,16 @@
             <h2 class="pane-title">Live API Audit Logs</h2>
             <p class="pane-desc">Real-time log buffer of all queries, proxy calls, latencies, and security rejections.</p>
           </div>
-          <div style="display: flex; gap: 10px;">
-            <select id="logStatusFilter" class="form-select" style="width: 140px; padding: 6px 10px; font-size: 12px;" onchange="loadLogs()">
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <input type="text" id="logSearchInput" placeholder="Filter endpoint or key (e.g. /docs, eternalgy2026)..." class="form-input" style="width: 300px; padding: 6px 10px; font-size: 12px;" oninput="debounceLoadLogs()">
+            <select id="logStatusFilter" class="form-select" style="width: 130px; padding: 6px 10px; font-size: 12px;" onchange="loadLogs()">
               <option value="all">All Statuses</option>
               <option value="2xx">2xx OK</option>
               <option value="4xx">4xx Auth/Denied</option>
               <option value="5xx">5xx Errors</option>
             </select>
-            <button class="btn sm" onclick="loadLogs()">Refresh</button>
+            <button class="btn sm" onclick="clearLogFilters()">Clear</button>
+            <button class="btn sm primary" onclick="loadLogs()">Refresh</button>
           </div>
         </div>
 

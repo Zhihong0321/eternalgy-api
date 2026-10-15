@@ -158,13 +158,89 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   /**
-   * GET /api/admin/audit-logs - View recent API calls and security audits
+   * GET /api/admin/audit-logs - View recent API calls and security audits with flexible filters
    */
-  app.get<{ Querystring: { limit?: string } }>('/api/admin/audit-logs', async (request) => {
+  app.get<{
+    Querystring: {
+      limit?: string;
+      status?: string;
+      statusCode?: string;
+      minStatus?: string;
+      method?: string;
+      keyId?: string;
+      key?: string;
+      endpoint?: string;
+      path?: string;
+      search?: string;
+    };
+  }>('/api/admin/audit-logs', async (request) => {
     const limit = Number(request.query.limit) || 50;
-    const logs = getRecentAuditLogs(limit);
+    const { status, statusCode, minStatus, method, keyId, key, endpoint, path, search } = request.query;
+
+    let minStatusCode: number | undefined;
+    let exactStatusCode: number | undefined;
+
+    if (statusCode) {
+      exactStatusCode = Number(statusCode);
+    } else if (minStatus) {
+      minStatusCode = Number(minStatus);
+    } else if (status === '4xx') {
+      minStatusCode = 400;
+    } else if (status === '5xx') {
+      minStatusCode = 500;
+    }
+
+    const effectiveKeyId = keyId || key;
+    const effectiveEndpoint = endpoint || path;
+
+    let logs = getRecentAuditLogs(limit, {
+      statusCode: exactStatusCode,
+      minStatus: minStatusCode,
+      method,
+      keyId: effectiveKeyId,
+      endpoint: effectiveEndpoint,
+      search,
+    });
+
+    if (status === '2xx') {
+      logs = logs.filter((l) => l.statusCode >= 200 && l.statusCode < 300);
+    } else if (status === '4xx') {
+      logs = logs.filter((l) => l.statusCode >= 400 && l.statusCode < 500);
+    } else if (status === '5xx') {
+      logs = logs.filter((l) => l.statusCode >= 500);
+    }
+
     return { count: logs.length, logs };
   });
+
+  /**
+   * GET /api/admin/keys/:id/logs - View audit logs specifically for a given API key
+   */
+  app.get<{ Params: { id: string }; Querystring: { limit?: string; endpoint?: string; search?: string } }>(
+    '/api/admin/keys/:id/logs',
+    async (request) => {
+      const { id } = request.params;
+      const limit = Number(request.query.limit) || 50;
+      const { endpoint, search } = request.query;
+
+      const keyRecord = (await keyService.getKeyById(id)) || (await keyService.getValidKey(id)).record;
+      const targetId = keyRecord ? keyRecord.id : id;
+
+      const logs = getRecentAuditLogs(limit, {
+        keyId: targetId,
+        endpoint,
+        search,
+      });
+
+      return {
+        keyId: targetId,
+        keyName: keyRecord?.name,
+        apiKey: keyRecord?.apiKey,
+        count: logs.length,
+        logs,
+      };
+    }
+  );
 
   /**
    * GET /api/admin/proxy-services - List all configured 3rd-party upstream services

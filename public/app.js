@@ -307,6 +307,7 @@ function renderKeysTable(keys) {
           <div style="display: flex; gap: 6px;">
             <button class="btn sm" onclick="openKeyDocs('${k.id}')" title="Interactive Docs Portal">Docs</button>
             <button class="btn sm" onclick="copyKeyDocLink('${k.id}')" title="Copy shareable link">Link</button>
+            <button class="btn sm" onclick="filterLogsByKey('${k.id}')" title="View Audit Logs for this key">Logs</button>
             <button class="btn sm" onclick="viewPermissions('${k.id}')">Rules</button>
             <button class="btn sm" style="color: var(--danger);" onclick="deleteKey('${k.id}')">Revoke</button>
           </div>
@@ -577,22 +578,57 @@ function openKeyDocs(id) {
   window.open(`/docs/keys/${id}`, '_blank');
 }
 
+// Filter logs by key from keys table
+function filterLogsByKey(keyId) {
+  const tabs = document.querySelectorAll('.tab-btn');
+  tabs.forEach((t) => t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach((p) => p.classList.remove('active'));
+
+  const logsBtn = document.querySelector('[data-tab="logsTab"]');
+  if (logsBtn) logsBtn.classList.add('active');
+  const logsPane = document.getElementById('logsTab');
+  if (logsPane) logsPane.classList.add('active');
+
+  const searchInput = document.getElementById('logSearchInput');
+  if (searchInput) searchInput.value = keyId;
+
+  loadLogs();
+  startLogPolling();
+}
+
+function clearLogFilters() {
+  const searchInput = document.getElementById('logSearchInput');
+  if (searchInput) searchInput.value = '';
+  const statusSelect = document.getElementById('logStatusFilter');
+  if (statusSelect) statusSelect.value = 'all';
+  loadLogs();
+}
+
+let debounceTimer = null;
+function debounceLoadLogs() {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    loadLogs();
+  }, 300);
+}
+
 // Live Audit Logs
 async function loadLogs() {
   if (!adminSecret) return;
   try {
-    const filter = document.getElementById('logStatusFilter').value;
-    const res = await fetch('/api/admin/audit-logs?limit=50', { headers: getHeaders() });
+    const statusFilter = document.getElementById('logStatusFilter')?.value || 'all';
+    const searchFilter = document.getElementById('logSearchInput')?.value.trim() || '';
+
+    const params = new URLSearchParams();
+    params.set('limit', '100');
+    if (statusFilter !== 'all') params.set('status', statusFilter);
+    if (searchFilter) params.set('search', searchFilter);
+
+    const res = await fetch(`/api/admin/audit-logs?${params.toString()}`, { headers: getHeaders() });
     if (!res.ok) return;
 
     const data = await res.json();
-    let logs = data.logs || [];
-
-    if (filter === '2xx') logs = logs.filter((l) => l.statusCode >= 200 && l.statusCode < 300);
-    if (filter === '4xx') logs = logs.filter((l) => l.statusCode >= 400 && l.statusCode < 500);
-    if (filter === '5xx') logs = logs.filter((l) => l.statusCode >= 500);
-
-    renderLogsTable(logs);
+    renderLogsTable(data.logs || []);
   } catch (err) {
     console.error('Failed to load logs', err);
   }

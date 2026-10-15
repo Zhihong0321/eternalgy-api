@@ -152,10 +152,16 @@ describe('API Gateway HTTP Integration & Per-API-Key Access Control', () => {
     expect(disabledRes.json().message).toContain('deactivated by administrator');
   });
 
-  it('checks audit logs after requests', async () => {
+  it('checks audit logs after requests with endpoint and search filtering', async () => {
+    // Make request to HTML to Video Tools & API Key Document endpoint
+    await app.inject({
+      method: 'GET',
+      url: '/docs/keys/eternalgy2026',
+    });
+
     const res = await app.inject({
       method: 'GET',
-      url: '/api/admin/audit-logs',
+      url: '/api/admin/audit-logs?endpoint=eternalgy2026',
       headers: {
         'x-admin-secret': config.ADMIN_API_KEY,
       },
@@ -164,7 +170,20 @@ describe('API Gateway HTTP Integration & Per-API-Key Access Control', () => {
     expect(res.statusCode).toBe(200);
     const json = res.json();
     expect(json.count).toBeGreaterThan(0);
-    expect(json.logs[0].url).toBeDefined();
+    expect(json.logs.some((l: any) => l.url.includes('eternalgy2026'))).toBe(true);
+
+    // Test per-key logs endpoint
+    const keyLogsRes = await app.inject({
+      method: 'GET',
+      url: '/api/admin/keys/key_eternalgy2026/logs',
+      headers: {
+        'x-admin-secret': config.ADMIN_API_KEY,
+      },
+    });
+    expect(keyLogsRes.statusCode).toBe(200);
+    const keyLogsJson = keyLogsRes.json();
+    expect(keyLogsJson.keyId).toBe('key_eternalgy2026');
+    expect(keyLogsJson.logs.length).toBeGreaterThan(0);
   });
 
   it('exposes tailored API documentation and schemas for a specific key', async () => {

@@ -450,9 +450,15 @@ export async function keyDocsRoutes(app: FastifyInstance) {
     const keyId = (req.params?.keyId as string) || (req.query?.keyId as string);
     if (keyId) {
       const rec = await keyService.getKeyById(keyId);
-      if (rec) return { ok: true, keyRecord: rec };
+      if (rec) {
+        req.authContext = { keyId: rec.id, clientName: rec.name, role: rec.role };
+        return { ok: true, keyRecord: rec };
+      }
       const valid = await keyService.getValidKey(keyId);
-      if (valid.valid && valid.record) return { ok: true, keyRecord: valid.record };
+      if (valid.valid && valid.record) {
+        req.authContext = { keyId: valid.record.id, clientName: valid.record.name, role: valid.record.role };
+        return { ok: true, keyRecord: valid.record };
+      }
     }
 
     const rawKey =
@@ -464,6 +470,7 @@ export async function keyDocsRoutes(app: FastifyInstance) {
     if (rawKey) {
       const keyResult = await keyService.getValidKey(rawKey);
       if (keyResult.valid && keyResult.record) {
+        req.authContext = { keyId: keyResult.record.id, clientName: keyResult.record.name, role: keyResult.record.role };
         return { ok: true, keyRecord: keyResult.record };
       }
     }
