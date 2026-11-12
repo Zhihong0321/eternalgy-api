@@ -50,6 +50,15 @@ export const CATALOG_PACKAGE_COLUMNS = [
 ];
 
 /**
+ * Table grants added after keys were first seeded. Stored keys keep their own copy of
+ * permissions, so these are merged into existing keys of the listed roles on startup
+ * (only when the key has no entry for that table yet).
+ */
+export const ADDED_ROLE_GRANTS: { roles: string[]; table: string; policy: { actions: string[] } }[] = [
+  { roles: ['catalog_viewer', 'product_manager', 'video_maker'], table: 'afa_rates', policy: { actions: ['read'] } },
+];
+
+/**
  * Built-in Role Definitions
  */
 export const ROLE_TEMPLATES: Record<string, Record<string, TablePolicy>> = {
@@ -67,6 +76,9 @@ export const ROLE_TEMPLATES: Record<string, Record<string, TablePolicy>> = {
       actions: ['read'],
     },
     tariff_b_d_database: {
+      actions: ['read'],
+    },
+    afa_rates: {
       actions: ['read'],
     },
   },
@@ -117,6 +129,9 @@ export const ROLE_TEMPLATES: Record<string, Record<string, TablePolicy>> = {
     },
     package: {
       actions: ['read', 'create', 'update', 'delete'],
+    },
+    afa_rates: {
+      actions: ['read'],
     },
   },
 

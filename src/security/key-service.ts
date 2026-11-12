@@ -6,6 +6,7 @@ import {
   ROLE_PROXY_TEMPLATES,
   CATALOG_PRODUCT_COLUMNS,
   CATALOG_PACKAGE_COLUMNS,
+  ADDED_ROLE_GRANTS,
 } from './policies.js';
 
 class KeyService {
@@ -299,6 +300,27 @@ class KeyService {
       }
     } catch (err: any) {
       console.warn('[KeyService] Catalog column repair skipped:', err.message);
+    }
+
+    // Merge newer table grants into existing keys that do not have that table yet.
+    for (const grant of ADDED_ROLE_GRANTS) {
+      try {
+        const res = await executeQuery(
+          `UPDATE _gateway_api_keys
+              SET permissions = jsonb_set(
+                    jsonb_set(permissions, '{tables}', COALESCE(permissions->'tables', '{}'::jsonb), true),
+                    ARRAY['tables', $1::text], $2::jsonb, true),
+                  updated_at = NOW()
+            WHERE role = ANY($3::text[])
+              AND NOT (COALESCE(permissions->'tables', '{}'::jsonb) ? $1::text)`,
+          [grant.table, JSON.stringify(grant.policy), grant.roles]
+        );
+        if (res.rowCount) {
+          console.log(`[KeyService] Granted '${grant.table}' to ${res.rowCount} existing key(s).`);
+        }
+      } catch (err: any) {
+        console.warn(`[KeyService] Grant of '${grant.table}' skipped:`, err.message);
+      }
     }
   }
 
