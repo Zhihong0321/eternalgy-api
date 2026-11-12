@@ -35,6 +35,21 @@ export const DEFAULT_SENSITIVE_COLUMNS = new Set([
 ]);
 
 /**
+ * Public catalog columns (must match the real `product` / `package` tables).
+ * Internal fields (cost_price, inventory, nett_price, max_discount, need_approval) are left out.
+ */
+export const CATALOG_PRODUCT_COLUMNS = [
+  'id', 'bubble_id', 'name', 'label', 'description', 'linked_brand', 'linked_category',
+  'image', 'pdf_product', 'selling_price', 'solar_output_rating', 'inverter_rating',
+  'warranty_name', 'product_warranty_desc', 'power_warranty', 'warranty_link', 'active', 'created_at',
+];
+
+export const CATALOG_PACKAGE_COLUMNS = [
+  'id', 'bubble_id', 'package_name', 'type', 'price', 'invoice_desc', 'panel', 'panel_qty',
+  'inverter_1', 'inverter_2', 'inverter_3', 'inverter_4', 'linked_package_item', 'special', 'active',
+];
+
+/**
  * Built-in Role Definitions
  */
 export const ROLE_TEMPLATES: Record<string, Record<string, TablePolicy>> = {
@@ -42,11 +57,11 @@ export const ROLE_TEMPLATES: Record<string, Record<string, TablePolicy>> = {
   catalog_viewer: {
     product: {
       actions: ['read'],
-      allowedColumns: ['id', 'name', 'category', 'specifications', 'price', 'is_active', 'created_at'],
+      allowedColumns: CATALOG_PRODUCT_COLUMNS,
     },
     package: {
       actions: ['read'],
-      allowedColumns: ['id', 'name', 'code', 'description', 'price', 'system_size_kw', 'is_active'],
+      allowedColumns: CATALOG_PACKAGE_COLUMNS,
     },
     tnb_tariff_2025: {
       actions: ['read'],

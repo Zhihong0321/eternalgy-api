@@ -1,7 +1,12 @@
 import crypto from 'node:crypto';
 import { executeQuery } from '../db/pool.js';
 import { ApiKeyRecord, TablePolicy, ProxyPolicy } from './types.js';
-import { ROLE_TEMPLATES, ROLE_PROXY_TEMPLATES } from './policies.js';
+import {
+  ROLE_TEMPLATES,
+  ROLE_PROXY_TEMPLATES,
+  CATALOG_PRODUCT_COLUMNS,
+  CATALOG_PACKAGE_COLUMNS,
+} from './policies.js';
 
 class KeyService {
   // In-memory cache for sub-millisecond authentication
@@ -272,6 +277,28 @@ class KeyService {
          ON CONFLICT (api_key) DO NOTHING`,
         [k.id, k.name, k.apiKey, k.role, k.rateLimitRpm, JSON.stringify({ tables: k.tables, proxies: k.proxies || {} })]
       );
+    }
+
+    // One-time repair: the original catalog_viewer seed stored column names that do not exist
+    // (e.g. package.system_size_kw, product.category). Only rows still carrying that old list are touched,
+    // so any permissions an admin edited by hand are left alone.
+    try {
+      const repaired = await executeQuery(
+        `UPDATE _gateway_api_keys
+            SET permissions = jsonb_set(
+                  jsonb_set(permissions, '{tables,product,allowedColumns}', $1::jsonb, true),
+                  '{tables,package,allowedColumns}', $2::jsonb, true),
+                updated_at = NOW()
+          WHERE role = 'catalog_viewer'
+            AND (permissions->'tables'->'package'->'allowedColumns' ? 'system_size_kw'
+              OR permissions->'tables'->'product'->'allowedColumns' ? 'category')`,
+        [JSON.stringify(CATALOG_PRODUCT_COLUMNS), JSON.stringify(CATALOG_PACKAGE_COLUMNS)]
+      );
+      if (repaired.rowCount) {
+        console.log(`[KeyService] Repaired catalog column lists on ${repaired.rowCount} key(s).`);
+      }
+    } catch (err: any) {
+      console.warn('[KeyService] Catalog column repair skipped:', err.message);
     }
   }
 

@@ -4,6 +4,31 @@ import { PolicyEngine } from '../security/policy-engine.js';
 import { QueryBuilder } from '../db/query-builder.js';
 import { executeQuery } from '../db/pool.js';
 import { GLOBALLY_BLOCKED_TABLES } from '../security/policies.js';
+import { schemaService } from '../db/schema-service.js';
+
+/**
+ * Drop whitelisted columns that no longer exist in the table, so a stale key policy
+ * returns the remaining columns instead of failing the whole request.
+ * Never widens access: if nothing valid is left it falls back to `id` (or the original list).
+ */
+async function resolveAllowedColumns(table: string, allowed?: string[]): Promise<string[] | undefined> {
+  if (!allowed || allowed.length === 0) return allowed;
+  try {
+    const cols = await schemaService.getColumnsForTable(table);
+    if (!cols.length) return allowed;
+    const real = new Set(cols.map((c) => c.name));
+    const kept = allowed.filter((c) => real.has(c));
+    const dropped = allowed.filter((c) => !real.has(c));
+    if (dropped.length) {
+      console.warn(`[Data] Policy for '${table}' lists missing column(s), skipped: ${dropped.join(', ')}`);
+    }
+    if (kept.length) return kept;
+    return real.has('id') ? ['id'] : allowed;
+  } catch (err: any) {
+    console.warn(`[Data] Column check for '${table}' skipped:`, err?.message);
+    return allowed;
+  }
+}
 
 interface TableParams {
   table: string;
@@ -114,7 +139,7 @@ export async function dataRoutes(app: FastifyInstance) {
 
     const query = QueryBuilder.buildSelect({
       table: queryTable,
-      allowedColumns: auth.tablePolicy?.allowedColumns,
+      allowedColumns: await resolveAllowedColumns(queryTable, auth.tablePolicy?.allowedColumns),
       filter: filters,
       rowScopeConstraint: auth.rowScopeConstraint,
       limit: limit ? Number(limit) : undefined,
@@ -178,7 +203,7 @@ export async function dataRoutes(app: FastifyInstance) {
     const queryTable = auth.resolvedTableName || targetTable;
     const query = QueryBuilder.buildSelect({
       table: queryTable,
-      allowedColumns: auth.tablePolicy?.allowedColumns,
+      allowedColumns: await resolveAllowedColumns(queryTable, auth.tablePolicy?.allowedColumns),
       filter: { id },
       rowScopeConstraint: auth.rowScopeConstraint,
       limit: 1,
