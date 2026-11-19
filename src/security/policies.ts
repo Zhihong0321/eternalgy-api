@@ -56,6 +56,7 @@ export const CATALOG_PACKAGE_COLUMNS = [
  */
 export const ADDED_ROLE_GRANTS: { roles: string[]; table: string; policy: { actions: string[] } }[] = [
   { roles: ['catalog_viewer', 'product_manager', 'video_maker'], table: 'afa_rates', policy: { actions: ['read'] } },
+  { roles: ['ceo'], table: 'ee_attachment', policy: { actions: ['read', 'create', 'update'] } },
 ];
 
 /**
@@ -151,6 +152,9 @@ export const ROLE_TEMPLATES: Record<string, Record<string, TablePolicy>> = {
     },
     submitted_payment: {
       actions: ['read'],
+    },
+    ee_attachment: {
+      actions: ['read', 'create', 'update'],
     },
   },
 };
