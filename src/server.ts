@@ -17,6 +17,7 @@ import { keyDocsRoutes } from './routes/key-docs.js';
 import { proxyRoutes } from './routes/proxy.js';
 import { exportRoutes } from './routes/export.js';
 import { salesRoutes } from './routes/sales.js';
+import { invoiceRoutes } from './routes/invoices.js';
 import { keyService } from './security/key-service.js';
 import { proxyService } from './security/proxy-service.js';
 
@@ -115,6 +116,7 @@ export async function buildServer() {
   await app.register(proxyRoutes);
   await app.register(exportRoutes);
   await app.register(salesRoutes);
+  await app.register(invoiceRoutes);
 
   // Custom 404 handler
   app.setNotFoundHandler((_req, reply) => {
