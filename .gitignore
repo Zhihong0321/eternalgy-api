@@ -7,3 +7,6 @@ yarn-debug.log*
 pnpm-debug.log*
 .DS_Store
 storage/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
