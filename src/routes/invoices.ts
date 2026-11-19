@@ -7,7 +7,7 @@ import { config } from '../config/env.js';
 /**
  * Read-only invoice lookup:
  *   GET /api/invoices/search?customer_name=...  -> invoices matching a customer name
- *   GET /api/invoices/:id                       -> full invoice detail (+ customer + payments)
+ *   GET /api/invoices/:id                       -> full invoice detail (+ customer, package, items, seda, products, payments)
  * `:id` may be the invoice id, bubble_id or invoice_number.
  * Requires the admin key or an API key with read access to the `invoice` table.
  */
@@ -131,44 +131,123 @@ export async function invoiceRoutes(app: FastifyInstance) {
       return reply.status(404).send({ statusCode: 404, message: 'Invoice not found' });
     }
 
-    // Customer and payments are best-effort: a failure here is reported on the
-    // response and never hides the invoice itself.
+    // Everything below is best-effort: a failed lookup is reported in `warnings`
+    // and never hides the invoice itself.
     const warnings: string[] = [];
-
-    let customer: Record<string, any> | null = null;
-    try {
-      if (invoice.linked_customer) {
-        const custRes = await executeQuery(
-          `SELECT customer_id, name, phone, email FROM customer WHERE customer_id = $1 LIMIT 1`,
-          [invoice.linked_customer]
-        );
-        customer = custRes.rows?.[0] ?? null;
+    const safe = async <T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> => {
+      try {
+        return await fn();
+      } catch (err: any) {
+        warnings.push(`${label} lookup failed: ${err?.message ?? 'unknown error'}`);
+        return fallback;
       }
-    } catch (err: any) {
-      warnings.push(`customer lookup failed: ${err?.message ?? 'unknown error'}`);
-    }
+    };
+    const rows = async (sql: string, params: any[]): Promise<Record<string, any>[]> => {
+      const res = await executeQuery(sql, params);
+      return (res.rows || []).map(stripSensitive);
+    };
+    const idList = (v: any): string[] => {
+      if (v === null || v === undefined || v === '') return [];
+      if (Array.isArray(v)) return v.map((x) => String(x)).filter(Boolean);
+      return String(v).split(/[,\s]+/).filter(Boolean);
+    };
 
-    let payments: Record<string, any>[] = [];
-    try {
-      const payRes = await executeQuery(
-        `SELECT * FROM payment
-         WHERE linked_invoice = $1 OR linked_invoice = $2 OR linked_invoice = $3
-         ORDER BY payment_date ASC NULLS LAST`,
-        [
-          String(invoice.bubble_id ?? ''),
-          String(invoice.id ?? ''),
-          String(invoice.invoice_number ?? ''),
-        ]
+    const invoiceKeys = [
+      String(invoice.bubble_id ?? ''),
+      String(invoice.id ?? ''),
+      String(invoice.invoice_number ?? ''),
+    ];
+
+    const customer = await safe('customer', async () => {
+      const ids = idList(invoice.linked_customer);
+      if (!ids.length) return null;
+      const r = await rows(
+        `SELECT * FROM customer WHERE customer_id = ANY($1::text[]) OR bubble_id = ANY($1::text[]) LIMIT 1`,
+        [ids]
       );
-      payments = (payRes.rows || []).map(stripSensitive);
-    } catch (err: any) {
-      warnings.push(`payments lookup failed: ${err?.message ?? 'unknown error'}`);
-    }
+      return r[0] ?? null;
+    }, null as Record<string, any> | null);
+
+    const payments = await safe('payments', () => rows(
+      `SELECT * FROM payment
+       WHERE linked_invoice = ANY($1::text[])
+       ORDER BY payment_date ASC NULLS LAST`,
+      [invoiceKeys.filter(Boolean)]
+    ), [] as Record<string, any>[]);
+
+    const pkg = await safe('package', async () => {
+      const ids = idList(invoice.linked_package);
+      if (!ids.length) return null;
+      const r = await rows(
+        `SELECT * FROM package WHERE bubble_id = ANY($1::text[]) OR id::text = ANY($1::text[]) LIMIT 1`,
+        [ids]
+      );
+      return r[0] ?? null;
+    }, null as Record<string, any> | null);
+
+    const invoiceItems = await safe('invoice_items', async () => {
+      const found = new Map<string, Record<string, any>>();
+      const add = (list: Record<string, any>[]) => {
+        for (const r of list) found.set(String(r.bubble_id ?? r.id ?? found.size), r);
+      };
+      const ids = idList(invoice.linked_invoice_item);
+      if (ids.length) {
+        try {
+          add(await rows(
+            `SELECT * FROM invoice_item WHERE bubble_id = ANY($1::text[]) OR id::text = ANY($1::text[])`,
+            [ids]
+          ));
+        } catch (err: any) {
+          warnings.push(`invoice_items (by id list) lookup failed: ${err?.message ?? 'unknown error'}`);
+        }
+      }
+      try {
+        add(await rows(
+          `SELECT * FROM invoice_item WHERE linked_invoice = ANY($1::text[])`,
+          [invoiceKeys.filter(Boolean)]
+        ));
+      } catch (err: any) {
+        if (!found.size) warnings.push(`invoice_items (by invoice) lookup failed: ${err?.message ?? 'unknown error'}`);
+      }
+      return Array.from(found.values());
+    }, [] as Record<string, any>[]);
+
+    const seda = await safe('seda_registration', async () => {
+      const ids = idList(invoice.linked_seda_registration);
+      if (!ids.length) return null;
+      const r = await rows(
+        `SELECT * FROM seda_registration WHERE bubble_id = ANY($1::text[]) OR id::text = ANY($1::text[]) LIMIT 1`,
+        [ids]
+      );
+      return r[0] ?? null;
+    }, null as Record<string, any> | null);
+
+    // Products referenced by the package or the invoice items (panel, inverter, ...).
+    const products = await safe('products', async () => {
+      const refs = new Set<string>();
+      const collect = (row: Record<string, any> | null) => {
+        for (const v of Object.values(row || {})) {
+          if (typeof v === 'string' && v.length >= 8 && v.length <= 64 && !/\s/.test(v)) refs.add(v);
+          else if (Array.isArray(v)) v.forEach((x) => typeof x === 'string' && refs.add(x));
+        }
+      };
+      collect(pkg);
+      invoiceItems.forEach(collect);
+      if (!refs.size) return [];
+      return rows(
+        `SELECT * FROM product WHERE bubble_id = ANY($1::text[]) LIMIT 50`,
+        [Array.from(refs)]
+      );
+    }, [] as Record<string, any>[]);
 
     return reply.send({
       data: {
         invoice: stripSensitive(invoice),
         customer,
+        package: pkg,
+        invoice_items: invoiceItems,
+        seda_registration: seda,
+        products,
         payments,
       },
       ...(warnings.length ? { warnings } : {}),
